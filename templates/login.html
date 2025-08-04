@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Huawei AI Assistant for Optical Network Planning</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="login-container">
+        <!-- Logo Section -->
+        <div class="login-logo-section">
+            <div class="logo-left">
+                <img src="{{ url_for('static', filename='Huawei-Logo.png') }}" alt="Huawei Logo" class="login-logo">
+            </div>
+            <div class="logo-right">
+                <img src="{{ url_for('static', filename='eand_Logo.svg') }}" alt="E& Logo" class="login-logo">
+            </div>
+        </div>
+
+        <!-- Login Form -->
+        <div class="login-form-container">
+            <div class="login-form">
+                <div class="welcome-header">
+                    <h1>Welcome to Huawei AI Assistant</h1>
+                    <h2>for Optical Network Planning for Etisalat</h2>
+                    <p>Please sign in to access the network planning assistant</p>
+                </div>
+
+                {% if error %}
+                <div class="error-message">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    {{ error }}
+                </div>
+                {% endif %}
+
+                <form method="POST" action="{{ url_for('login') }}" class="login-form-element">
+                    <div class="input-group">
+                        <div class="input-icon">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <input 
+                            type="text" 
+                            name="username" 
+                            placeholder="Username" 
+                            required
+                            autocomplete="username"
+                        >
+                    </div>
+
+                    <div class="input-group">
+                        <div class="input-icon">
+                            <i class="fas fa-lock"></i>
+                        </div>
+                        <input 
+                            type="password" 
+                            name="password" 
+                            placeholder="Password" 
+                            required
+                            autocomplete="current-password"
+                        >
+                    </div>
+
+                    <button type="submit" class="login-button">
+                        <span>Sign In</span>
+                        <i class="fas fa-sign-in-alt"></i>
+                    </button>
+                </form>
+
+                <div class="login-footer">
+                    <p>Demo Credentials:</p>
+                    <p><strong>Username:</strong> admin | <strong>Password:</strong> password123</p>
+                    <p><strong>Username:</strong> user | <strong>Password:</strong> password123</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

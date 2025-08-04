@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_socketio import SocketIO, emit
 import time
 import json
@@ -9,6 +9,21 @@ import random
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Simple user credentials (in production, use proper authentication)
+USERS = {
+    'admin': 'password123',
+    'user': 'password123'
+}
+
+def login_required(f):
+    """Decorator to check if user is logged in"""
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    decorated_function.__name__ = f.__name__
+    return decorated_function
 
 # Log parser class to handle the logs.txt format
 class LogParser:
@@ -165,7 +180,37 @@ supervisor = MockSupervisor()
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    """Redirect to login if not authenticated, otherwise to dashboard"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    return redirect(url_for('dashboard'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page and authentication"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if username in USERS and USERS[username] == password:
+            session['user_id'] = username
+            return redirect(url_for('dashboard'))
+        else:
+            return render_template('login.html', error='Invalid username or password')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    """Logout user and clear session"""
+    session.clear()
+    return redirect(url_for('login'))
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    """Main dashboard page (current chat interface)"""
+    return render_template('dashboard.html', username=session.get('user_id'))
 
 @app.route('/health')
 def health_check():

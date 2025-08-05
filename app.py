@@ -140,7 +140,7 @@ class MockSupervisor:
         user_input_lower = user_input.lower()
         
         if any(word in user_input_lower for word in ['hello', 'hi', 'hey']):
-            return "Hello! I'm Huawei Network Planning AI Assistant for Etisalat (e&). I can help you with network planning, optimization, capacity analysis, and technical solutions. How can I assist you with your network planning needs today?"
+            return "Hello! I'm Huawei Network Planning AI Assistant, for Etisalat (e&). I can help you with network planning, optimization, capacity analysis, and technical solutions. How can I assist you with your network planning needs today?"
         
         elif any(word in user_input_lower for word in ['help', 'assist', 'support']):
             return "I'm here to help with all your network planning needs! I can assist with coverage analysis, capacity planning, frequency optimization, site selection, traffic engineering, and network performance optimization. What specific aspect of network planning do you need help with?"
@@ -164,7 +164,7 @@ class MockSupervisor:
             return "Site selection and placement are critical for optimal network coverage. I can help you analyze terrain data, population density, traffic patterns, and existing infrastructure to recommend optimal site locations. This includes consideration of zoning restrictions and environmental factors."
         
         elif any(word in user_input_lower for word in ['huawei', 'etisalat']):
-            return "As Huawei Network Planning AI Assistant for Etisalat (e&), I'm specifically designed to work with Huawei equipment and Etisalat's network infrastructure. I can provide recommendations tailored to Huawei's product portfolio and Etisalat's operational requirements and standards."
+            return "As Huawei Network Planning AI Assistant, for Etisalat (e&), I'm specifically designed to work with Huawei equipment and Etisalat's network infrastructure. I can provide recommendations tailored to Huawei's product portfolio and Etisalat's operational requirements and standards."
         
         elif any(word in user_input_lower for word in ['thank', 'thanks']):
             return "You're welcome! I'm glad I could help with your network planning needs. If you have any other questions about network optimization, capacity planning, or technical solutions, feel free to ask!"
@@ -173,7 +173,7 @@ class MockSupervisor:
             return "I see you've sent a brief message. Could you please provide more details about your network planning question? I can help with coverage analysis, capacity planning, frequency optimization, site selection, and many other network planning aspects."
         
         else:
-            return f"Thank you for your network planning query: '{user_input}'. As Huawei Network Planning AI Assistant for Etisalat (e&), I can help you with comprehensive network analysis, optimization recommendations, and technical solutions. In the real implementation, this will come from your actual network planning supervisor with detailed analysis and specific recommendations for your network infrastructure."
+            return f"Thank you for your network planning query: '{user_input}'. As Huawei Network Planning AI Assistant, for Etisalat (e&), I can help you with comprehensive network analysis, optimization recommendations, and technical solutions. In the real implementation, this will come from your actual network planning supervisor with detailed analysis and specific recommendations for your network infrastructure."
 
 # Global supervisor instance
 supervisor = MockSupervisor()

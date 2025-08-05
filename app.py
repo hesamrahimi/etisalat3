@@ -276,7 +276,7 @@ def handle_message(data):
         })
 
 if __name__ == '__main__':
-    print("Starting Huawei Network Planning AI Assistant for Etisalat (e&)...")
+    print("Starting Huawei Network Planning AI Assistant, for Etisalat (e&)...")
     print("Access the application at: http://localhost:5000")
     print("Health check available at: http://localhost:5000/health")
     socketio.run(app, debug=True, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)

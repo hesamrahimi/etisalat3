@@ -9,84 +9,187 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="chat-container">
-        <!-- Header Container -->
-        <div class="header-container">
-            <!-- Logo Section -->
-            <div class="logo-section">
-                <div class="logo-left">
-                    <img src="{{ url_for('static', filename='Huawei-Logo.png') }}" alt="Huawei Logo" class="marginal-logo">
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <img src="{{ url_for('static', filename='Huawei-Logo.png') }}" alt="Huawei Logo" class="sidebar-logo-img">
+                    <span class="sidebar-title">AI Assistant</span>
                 </div>
-                <div class="logo-right">
-                    <img src="{{ url_for('static', filename='eand_Logo.svg') }}" alt="E& Logo" class="marginal-logo">
-                </div>
-            </div>
-
-            <!-- Header -->
-            <div class="chat-header">
-                <div class="header-content">
-                    <div class="header-center">
-                        <h1>Huawei Network Planning AI Assistant, for Etisalat (e&)</h1>
-                    </div>
-                    <div class="header-controls">
-                        <div class="user-info">
-                            <span class="user-greeting">Welcome, {{ username }}!</span>
-                            <a href="{{ url_for('logout') }}" class="logout-button">
-                                <i class="fas fa-sign-out-alt"></i>
-                                <span>Logout</span>
-                            </a>
-                        </div>
-                        <label class="toggle-container">
-                            <input type="checkbox" id="thoughts-toggle">
-                            <span class="toggle-slider"></span>
-                            <span class="toggle-label">Show Thoughts</span>
-                        </label>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Chat Messages -->
-        <div class="chat-messages" id="chat-messages">
-            <!-- Welcome message -->
-            <div class="message ai-message">
-                <div class="message-avatar">
-                    <i class="fas fa-robot"></i>
-                </div>
-                <div class="message-content">
-                    <div class="message-text">
-                        Hello! I'm Huawei Network Planning AI Assistant, for Etisalat (e&). I can help you with network planning, optimization, capacity analysis, and technical solutions. How can I assist you with your network planning needs today?
-                    </div>
-                    <div class="message-timestamp">
-                        <i class="fas fa-clock"></i>
-                        <span id="welcome-time"></span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Chat Input Container -->
-        <div class="chat-input-container">
-            <div class="input-wrapper">
-                <textarea 
-                    id="message-input" 
-                    placeholder="Type your network planning question here..."
-                    rows="1"
-                    maxlength="2000"
-                ></textarea>
-                <button id="send-button" class="send-button" disabled>
-                    <i class="fas fa-paper-plane"></i>
+                <button class="sidebar-toggle" id="sidebar-toggle">
+                    <i class="fas fa-bars"></i>
                 </button>
             </div>
-            <div class="input-footer">
-                <span class="char-count">
-                    <span id="char-count">0</span>/2000
-                </span>
-                <span class="status-indicator" id="status-indicator">
-                    Ready
-                </span>
+
+            <!-- Breadcrumb Navigation -->
+            <nav class="breadcrumb-nav">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="#" class="breadcrumb-link">
+                            <i class="fas fa-home"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="breadcrumb-item active">
+                        <span>Network Planning</span>
+                    </li>
+                </ol>
+            </nav>
+
+            <!-- Quick Actions -->
+            <div class="quick-actions">
+                <h3 class="quick-actions-title">
+                    <i class="fas fa-bolt"></i>
+                    Quick Actions
+                </h3>
+                <div class="quick-actions-grid">
+                    <button class="quick-action-btn" data-query="Help me with coverage analysis">
+                        <i class="fas fa-signal"></i>
+                        <span>Coverage Analysis</span>
+                    </button>
+                    <button class="quick-action-btn" data-query="I need help with capacity planning">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Capacity Planning</span>
+                    </button>
+                    <button class="quick-action-btn" data-query="How to optimize frequency allocation">
+                        <i class="fas fa-wave-square"></i>
+                        <span>Frequency Optimization</span>
+                    </button>
+                    <button class="quick-action-btn" data-query="5G network planning assistance">
+                        <i class="fas fa-5g"></i>
+                        <span>5G Planning</span>
+                    </button>
+                    <button class="quick-action-btn" data-query="Site selection recommendations">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>Site Selection</span>
+                    </button>
+                    <button class="quick-action-btn" data-query="Network performance optimization">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>Performance Optimization</span>
+                    </button>
+                </div>
             </div>
-        </div>
+
+            <!-- Conversation History -->
+            <div class="conversation-history">
+                <div class="history-header">
+                    <h3 class="history-title">
+                        <i class="fas fa-history"></i>
+                        Recent Conversations
+                    </h3>
+                    <button class="clear-history-btn" id="clear-history-btn">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+                <div class="history-list" id="history-list">
+                    <!-- Conversation history items will be populated by JavaScript -->
+                    <div class="history-item active">
+                        <div class="history-item-content">
+                            <div class="history-item-title">Current Session</div>
+                            <div class="history-item-preview">Welcome to Huawei AI Assistant</div>
+                            <div class="history-item-time">Just now</div>
+                        </div>
+                        <button class="history-item-delete">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Profile Section -->
+            <div class="user-profile">
+                <div class="user-info">
+                    <div class="user-avatar">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="user-details">
+                        <div class="user-name">{{ username }}</div>
+                        <div class="user-role">Network Planner</div>
+                    </div>
+                </div>
+                <a href="{{ url_for('logout') }}" class="logout-link">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header Container -->
+            <div class="header-container">
+                <div class="logo-section">
+                    <div class="logo-left">
+                        <img src="{{ url_for('static', filename='Huawei-Logo.png') }}" alt="Huawei Logo" class="marginal-logo">
+                    </div>
+                    <div class="logo-right">
+                        <img src="{{ url_for('static', filename='eand_Logo.svg') }}" alt="E& Logo" class="marginal-logo">
+                    </div>
+                </div>
+
+                <div class="chat-header">
+                    <div class="header-content">
+                        <div class="header-center">
+                            <h1>Huawei Network Planning AI Assistant, for Etisalat (e&)</h1>
+                        </div>
+                        <div class="header-controls">
+                            <div class="user-info">
+                                <span class="user-greeting">Welcome, {{ username }}!</span>
+                            </div>
+                            <div class="toggle-container">
+                                <input type="checkbox" id="thoughts-toggle" class="toggle-input">
+                                <label for="thoughts-toggle" class="toggle-slider"></label>
+                                <span class="toggle-label">Thoughts</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Messages -->
+            <div class="chat-messages" id="chat-messages">
+                <div class="message ai-message">
+                    <div class="message-avatar">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div class="message-content">
+                        <div class="message-text">
+                            Hello! I'm Huawei Network Planning AI Assistant, for Etisalat (e&). I can help you with network planning, optimization, capacity analysis, and technical solutions. How can I assist you with your network planning needs today?
+                        </div>
+                        <div class="message-timestamp">
+                            <i class="fas fa-clock"></i>
+                            <span id="welcome-time">Just now</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Input Container -->
+            <div class="chat-input-container">
+                <div class="input-wrapper">
+                    <textarea 
+                        id="message-input" 
+                        placeholder="Type your network planning question here..." 
+                        rows="1" 
+                        maxlength="2000"
+                    ></textarea>
+                    <button id="send-button" disabled>
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+                <div class="input-footer">
+                    <div class="char-count">
+                        <i class="fas fa-text-width"></i>
+                        <span id="char-count">0</span>
+                    </div>
+                    <div class="status-indicator" id="status-indicator">
+                        <i class="fas fa-circle"></i>
+                        <span>Ready</span>
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>

@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent Communication Flow</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .controls {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn.secondary {
+            background: linear-gradient(45deg, #2196F3, #1976D2);
+        }
+
+        .btn.danger {
+            background: linear-gradient(45deg, #f44336, #d32f2f);
+        }
+
+        .visualization-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            position: relative;
+            min-height: 600px;
+        }
+
+        .graph-container {
+            position: relative;
+            width: 100%;
+            height: 500px;
+            border: 2px dashed #ddd;
+            border-radius: 15px;
+            background: #fafafa;
+            overflow: hidden;
+        }
+
+                 .agent-node {
+             position: absolute;
+             width: 80px;
+             height: 80px;
+             border-radius: 50%;
+             display: flex;
+             align-items: center;
+             justify-content: center;
+             font-weight: bold;
+             font-size: 0.7rem;
+             text-align: center;
+             color: white;
+             cursor: pointer;
+             transition: all 0.5s ease;
+             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+             border: 3px solid transparent;
+         }
+
+
+
+        .agent-node.idle {
+            background: linear-gradient(45deg, #9e9e9e, #757575);
+        }
+
+        .agent-node.processing {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            animation: pulse 1.5s infinite;
+        }
+
+        .agent-node.waiting {
+            background: linear-gradient(45deg, #FF9800, #F57C00);
+            animation: pulse 1.5s infinite;
+        }
+
+        .agent-node.active {
+            background: linear-gradient(45deg, #2196F3, #1976D2);
+            border-color: #2196F3;
+            box-shadow: 0 0 20px rgba(33, 150, 243, 0.6);
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .connection-line {
+            position: absolute;
+            height: 3px;
+            background: linear-gradient(90deg, #2196F3, #4CAF50);
+            transform-origin: left center;
+            z-index: 1;
+            transition: all 0.5s ease;
+        }
+
+        .connection-line::after {
+            content: '';
+            position: absolute;
+            right: -8px;
+            top: -3px;
+            width: 0;
+            height: 0;
+            border-left: 8px solid #4CAF50;
+            border-top: 4px solid transparent;
+            border-bottom: 4px solid transparent;
+        }
+
+        .connection-line.animated {
+            background: linear-gradient(90deg, #FF9800, #F44336);
+            animation: flow 2s infinite;
+        }
+
+        .connection-line.animated::after {
+            border-left-color: #F44336;
+        }
+
+        .connection-line.static::after {
+            border-left-color: #4CAF50;
+        }
+
+        .connection-line.static {
+            background: linear-gradient(90deg, #2196F3, #4CAF50);
+            transition: all 0.5s ease;
+        }
+
+        @keyframes flow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .status-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            min-width: 200px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-indicator.idle { background: #9e9e9e; }
+        .status-indicator.processing { background: #4CAF50; }
+        .status-indicator.waiting { background: #FF9800; }
+
+        .log-panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .log-entry {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #2196F3;
+            background: #f5f5f5;
+        }
+
+        .log-entry .timestamp {
+            font-size: 0.8rem;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .log-entry .message {
+            font-size: 0.9rem;
+            color: #333;
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2rem;
+            color: #666;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .status-info {
+            text-align: center;
+            color: white;
+        }
+
+        .status-info h3 {
+            margin-bottom: 10px;
+            font-size: 1.3rem;
+        }
+
+        .status-info p {
+            opacity: 0.9;
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 AI Agent Communication Flow</h1>
+            <p>Real-time visualization of agent interactions and message flow</p>
+        </div>
+
+        <div class="controls">
+            <div class="status-info">
+                <h3>🤖 AI Agent Communication Flow</h3>
+                <p>Visualization will automatically start when you send a message in the chat</p>
+            </div>
+            <button class="btn secondary" id="resetBtn">🔄 Reset</button>
+        </div>
+
+        <div class="visualization-container">
+            <div class="graph-container" id="graphContainer">
+                <div class="loading" id="loadingMessage">Loading agent communication flow...</div>
+                
+                <!-- Agent nodes will be dynamically created here -->
+                
+                <!-- Connection lines will be dynamically created here -->
+            </div>
+
+            <div class="status-panel">
+                <h4>Agent Status</h4>
+                <div class="status-item">
+                    <div class="status-indicator idle"></div>
+                    <span>Idle</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-indicator processing"></div>
+                    <span>Processing</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-indicator waiting"></div>
+                    <span>Waiting</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="log-panel">
+            <h3>📋 Communication Log</h3>
+            <div id="logEntries"></div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #9e9e9e;"></div>
+                <span>Idle</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #4CAF50;"></div>
+                <span>Processing</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #FF9800;"></div>
+                <span>Waiting</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #2196F3;"></div>
+                <span>Active</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class AgentCommunicationVisualizer {
+            constructor() {
+                                 this.agents = {
+                     'User': { x: 400, y: 20, status: 'idle' },
+                     'Supervisor': { x: 400, y: 140, status: 'idle' },
+                     'NBI Agent': { x: 200, y: 220, status: 'idle' },
+                     'Plan Agent': { x: 600, y: 220, status: 'idle' },
+                     'DT Agent': { x: 200, y: 320, status: 'idle' },
+                     'Tunnel Operator': { x: 600, y: 320, status: 'idle' },
+                     '__end__': { x: 400, y: 400, status: 'idle' }
+                 };
+                
+                this.connections = [];
+                this.currentStep = 0;
+                this.isPlaying = false;
+                this.isPaused = false;
+                this.communicationData = [];
+                
+                this.initializeElements();
+                this.setupEventListeners();
+                this.loadCommunicationData();
+            }
+
+            initializeElements() {
+                this.graphContainer = document.getElementById('graphContainer');
+                this.startBtn = document.getElementById('startBtn');
+                this.pauseBtn = document.getElementById('pauseBtn');
+                this.resetBtn = document.getElementById('resetBtn');
+                this.stopBtn = document.getElementById('stopBtn');
+                this.logEntries = document.getElementById('logEntries');
+                this.loadingMessage = document.getElementById('loadingMessage');
+            }
+
+            setupEventListeners() {
+                this.resetBtn.addEventListener('click', () => this.resetVisualization());
+                
+                // Listen for communication events from the main chat
+                window.addEventListener('message', (event) => {
+                    if (event.data.type === 'start_visualization') {
+                        this.startVisualization(event.data.communicationData);
+                    }
+                });
+            }
+
+            async loadCommunicationData() {
+                try {
+                    const response = await fetch('/api/communication-data');
+                    this.communicationData = await response.json();
+                    this.createAgentNodes();
+                    this.loadingMessage.style.display = 'none';
+                } catch (error) {
+                    console.error('Error loading communication data:', error);
+                    this.loadingMessage.textContent = 'Error loading data. Please try again.';
+                }
+            }
+
+                         createAgentNodes() {
+                 Object.entries(this.agents).forEach(([name, config]) => {
+                     const node = document.createElement('div');
+                     node.className = `agent-node idle`;
+                     node.id = `agent-${name.replace(/\s+/g, '-')}`;
+                     node.style.left = `${config.x}px`;
+                     node.style.top = `${config.y}px`;
+                     node.textContent = name;
+                     node.title = `${name} - Idle`;
+                     
+                     node.addEventListener('click', () => this.showAgentDetails(name));
+                     
+                     this.graphContainer.appendChild(node);
+                 });
+             }
+
+            showAgentDetails(agentName) {
+                // Show agent details in a tooltip or modal
+                console.log(`Agent details for: ${agentName}`);
+            }
+
+            startVisualization(communicationData = null) {
+                if (communicationData) {
+                    this.communicationData = communicationData;
+                }
+                
+                if (this.communicationData.length === 0) {
+                    console.log('No communication data available.');
+                    return;
+                }
+
+                this.isPlaying = true;
+                this.isPaused = false;
+                this.currentStep = 0;
+                
+                this.processNextStep();
+            }
+
+            pauseVisualization() {
+                this.isPaused = !this.isPaused;
+                this.pauseBtn.textContent = this.isPaused ? '▶️ Resume' : '⏸️ Pause';
+            }
+
+            resetVisualization() {
+                this.currentStep = 0;
+                this.isPlaying = false;
+                this.isPaused = false;
+                
+                // Reset all agents to idle
+                Object.keys(this.agents).forEach(agentName => {
+                    this.updateAgentStatus(agentName, 'idle');
+                });
+                
+                // Clear connections
+                this.clearConnections();
+                
+                // Clear log
+                this.logEntries.innerHTML = '';
+                
+                this.startBtn.disabled = false;
+                this.pauseBtn.disabled = true;
+                this.resetBtn.disabled = true;
+                this.stopBtn.disabled = true;
+                this.pauseBtn.textContent = '⏸️ Pause';
+            }
+
+            stopVisualization() {
+                this.isPlaying = false;
+                this.isPaused = false;
+                // Don't reset visualization - keep arrows visible
+                // Only reset the playing state
+            }
+
+            async processNextStep() {
+                if (!this.isPlaying || this.isPaused) return;
+                
+                if (this.currentStep >= this.communicationData.length) {
+                    this.stopVisualization();
+                    return;
+                }
+
+                const step = this.communicationData[this.currentStep];
+                await this.processCommunicationStep(step);
+                
+                this.currentStep++;
+                
+                // Continue to next step after delay
+                setTimeout(() => this.processNextStep(), 3000);
+            }
+
+            async processCommunicationStep(step) {
+                const { caller, talkto, message } = step;
+                
+                // Update caller status to active
+                this.updateAgentStatus(caller, 'active');
+                
+                // Add log entry
+                this.addLogEntry(caller, talkto, message);
+                
+                // Wait for processing
+                await this.delay(1500);
+                
+                // Create connection from caller to callee (only one arrow per step)
+                this.createConnection(caller, talkto);
+                
+                // Update callee status to processing
+                this.updateAgentStatus(talkto, 'processing');
+                
+                // Wait for response
+                await this.delay(1500);
+                
+                // Update caller status to waiting
+                this.updateAgentStatus(caller, 'waiting');
+                
+                // Wait for final response
+                await this.delay(1000);
+                
+                // Reset both agents to idle
+                this.updateAgentStatus(caller, 'idle');
+                this.updateAgentStatus(talkto, 'idle');
+            }
+
+            updateAgentStatus(agentName, status) {
+                const node = document.getElementById(`agent-${agentName.replace(/\s+/g, '-')}`);
+                if (node) {
+                    node.className = `agent-node ${status}`;
+                    node.title = `${agentName} - ${status.charAt(0).toUpperCase() + status.slice(1)}`;
+                }
+            }
+
+            createConnection(fromAgent, toAgent) {
+                const fromNode = document.getElementById(`agent-${fromAgent.replace(/\s+/g, '-')}`);
+                const toNode = document.getElementById(`agent-${toAgent.replace(/\s+/g, '-')}`);
+                
+                if (!fromNode || !toNode) return;
+                
+                const fromRect = fromNode.getBoundingClientRect();
+                const toRect = toNode.getBoundingClientRect();
+                const containerRect = this.graphContainer.getBoundingClientRect();
+                
+                // Calculate center positions
+                const fromCenterX = fromRect.left - containerRect.left + fromRect.width / 2;
+                const fromCenterY = fromRect.top - containerRect.top + fromRect.height / 2;
+                const toCenterX = toRect.left - containerRect.left + toRect.width / 2;
+                const toCenterY = toRect.top - containerRect.top + toRect.height / 2;
+                
+                // Calculate direction vector
+                const dx = toCenterX - fromCenterX;
+                const dy = toCenterY - fromCenterY;
+                const length = Math.sqrt(dx * dx + dy * dy);
+                
+                if (length === 0) return; // Same position
+                
+                // Normalize direction vector
+                const dirX = dx / length;
+                const dirY = dy / length;
+                
+                // Calculate perpendicular vector for offset
+                const perpX = -dirY;
+                const perpY = dirX;
+                
+                // Count existing connections between these agents to create offset
+                const existingConnections = this.graphContainer.querySelectorAll('.connection-line');
+                let offsetCount = 0;
+                
+                existingConnections.forEach(conn => {
+                    // Check for connections in both directions between these agents
+                    if ((conn.dataset.from === fromAgent && conn.dataset.to === toAgent) ||
+                        (conn.dataset.from === toAgent && conn.dataset.to === fromAgent)) {
+                        offsetCount++;
+                    }
+                });
+                
+                // Calculate offset with smaller spacing
+                const offset = offsetCount * 8; // 8px spacing between parallel lines
+                
+                                 // Node radius (all nodes are circles with 40px radius)
+                 const nodeRadius = 40;
+                
+                                 // Calculate edge points (from border to border)
+                 const fromEdgeX = fromCenterX + dirX * nodeRadius;
+                 const fromEdgeY = fromCenterY + dirY * nodeRadius;
+                 const toEdgeX = toCenterX - dirX * nodeRadius;
+                 const toEdgeY = toCenterY - dirY * nodeRadius;
+                
+                // Apply perpendicular offset to edge points
+                // Alternate offset direction for better visual separation
+                const offsetDirection = offsetCount % 2 === 0 ? 1 : -1;
+                const finalOffset = offset * offsetDirection;
+                
+                const offsetFromX = fromEdgeX + perpX * finalOffset;
+                const offsetFromY = fromEdgeY + perpY * finalOffset;
+                const offsetToX = toEdgeX + perpX * finalOffset;
+                const offsetToY = toEdgeY + perpY * finalOffset;
+                
+                // Calculate the actual line length and angle
+                const lineDx = offsetToX - offsetFromX;
+                const lineDy = offsetToY - offsetFromY;
+                const lineLength = Math.sqrt(lineDx * lineDx + lineDy * lineDy);
+                const angle = Math.atan2(lineDy, lineDx) * 180 / Math.PI;
+                
+                const line = document.createElement('div');
+                line.className = 'connection-line animated';
+                line.dataset.from = fromAgent;
+                line.dataset.to = toAgent;
+                line.style.left = `${offsetFromX}px`;
+                line.style.top = `${offsetFromY}px`;
+                line.style.width = `${lineLength}px`;
+                line.style.transform = `rotate(${angle}deg)`;
+                
+                this.graphContainer.appendChild(line);
+                
+                // After animation, transition to static line (but keep it visible)
+                setTimeout(() => {
+                    line.classList.remove('animated');
+                    line.classList.add('static');
+                }, 2000);
+            }
+
+            clearConnections() {
+                const lines = this.graphContainer.querySelectorAll('.connection-line');
+                lines.forEach(line => line.remove());
+            }
+
+            addLogEntry(fromAgent, toAgent, message) {
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry';
+                
+                const timestamp = new Date().toLocaleTimeString();
+                const truncatedMessage = message.length > 100 ? message.substring(0, 100) + '...' : message;
+                
+                logEntry.innerHTML = `
+                    <div class="timestamp">${timestamp}</div>
+                    <div class="message">
+                        <strong>${fromAgent}</strong> → <strong>${toAgent}</strong>: ${truncatedMessage}
+                    </div>
+                `;
+                
+                this.logEntries.appendChild(logEntry);
+                this.logEntries.scrollTop = this.logEntries.scrollHeight;
+            }
+
+            delay(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+        }
+
+        // Initialize the visualizer when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new AgentCommunicationVisualizer();
+        });
+    </script>
+</body>
+</html> 

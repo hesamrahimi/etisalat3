@@ -98,6 +98,171 @@ class LogParser:
         """Reset the index to start from the beginning"""
         self.current_log_index = 0
 
+# Communication parser class to handle the logs_new.txt format
+class CommunicationParser:
+    def __init__(self, log_file_path='logs_new.txt'):
+        self.log_file_path = log_file_path
+        self.communication_data = []
+        # For real-time integration, we'll add entries as they come
+        self._parse_communications()
+    
+    def _parse_communications(self):
+        """Parse the logs_new.txt file and extract communication data"""
+        try:
+            with open(self.log_file_path, 'r', encoding='utf-8') as file:
+                content = file.read()
+        except FileNotFoundError:
+            print(f"Communication log file {self.log_file_path} not found. Using empty communication list.")
+            return
+        except Exception as e:
+            print(f"Error reading communication log file: {e}")
+            return
+        
+        # Split by the separator "----"
+        log_entries = content.split('----')
+        
+        for entry in log_entries:
+            entry = entry.strip()
+            if not entry:
+                continue
+            
+            # Extract communication data
+            communication = self._extract_communication_data(entry)
+            if communication:
+                self.communication_data.append(communication)
+    
+    def add_communication_entry(self, entry_data):
+        """
+        Add a new communication entry in real-time
+        This method will be called by your LangGraph supervisor as it yields responses
+        
+        Args:
+            entry_data: Dictionary with 'caller', 'talkto', 'message' keys
+        """
+        if entry_data and isinstance(entry_data, dict):
+            # Add timestamp if not present
+            if 'timestamp' not in entry_data:
+                entry_data['timestamp'] = datetime.now().isoformat()
+            
+            self.communication_data.append(entry_data)
+            print(f"Added communication entry: {entry_data['caller']} -> {entry_data['talkto']}")
+    
+    def reset_communications(self):
+        """Reset communication data for new conversation"""
+        self.communication_data = []
+        print("Communication data reset for new conversation")
+    
+    def get_latest_communications(self, count=None):
+        """
+        Get the latest communication entries
+        Useful for real-time updates to visualization
+        
+        Args:
+            count: Number of latest entries to return (None for all)
+        """
+        if count is None:
+            return self.communication_data
+        return self.communication_data[-count:] if self.communication_data else []
+    
+    def _extract_communication_data(self, entry):
+        """Extract communication data from log entry"""
+        import re
+        
+        try:
+            # Look for various communication patterns in the log entry
+            
+            # Pattern 1: ((), {'Agent': {'caller': 'X', 'talkto': 'Y', 'messages': [...]}})
+            pattern1 = r"\(\(\)\s*,\s*\{'([^']+)':\s*\{'caller':\s*'([^']+)',\s*'talkto':\s*'([^']+)',\s*'messages':\s*\[([^\]]+)\]"
+            matches1 = re.findall(pattern1, entry)
+            
+            if matches1:
+                agent_name, caller, talkto, messages_str = matches1[0]
+                # Extract message content
+                content_match = re.search(r"content='([^']*)'", messages_str)
+                if content_match:
+                    message = content_match.group(1)
+                else:
+                    # Fallback: extract any quoted string as message
+                    quoted_match = re.search(r"'([^']*)'", messages_str)
+                    message = quoted_match.group(1) if quoted_match else "Processing request..."
+                
+                return {
+                    'caller': caller,
+                    'talkto': talkto,
+                    'message': message,
+                    'timestamp': datetime.now().isoformat()
+                }
+            
+            # Pattern 2: ((), {'Agent': {'caller': 'X', 'messages': [...], 'talkto': 'Y'}})
+            pattern2 = r"\(\(\)\s*,\s*\{'([^']+)':\s*\{'caller':\s*'([^']+)',\s*'messages':\s*\[([^\]]+)\],\s*'talkto':\s*'([^']+)'"
+            matches2 = re.findall(pattern2, entry)
+            
+            if matches2:
+                agent_name, caller, messages_str, talkto = matches2[0]
+                # Extract message content
+                content_match = re.search(r"content='([^']*)'", messages_str)
+                if content_match:
+                    message = content_match.group(1)
+                else:
+                    # Fallback: extract any quoted string as message
+                    quoted_match = re.search(r"'([^']*)'", messages_str)
+                    message = quoted_match.group(1) if quoted_match else "Processing request..."
+                
+                return {
+                    'caller': caller,
+                    'talkto': talkto,
+                    'message': message,
+                    'timestamp': datetime.now().isoformat()
+                }
+            
+            # Pattern 3: ((), {'Agent': {'caller': 'X', 'talkto': 'Y', 'messages': ['simple string']}})
+            pattern3 = r"\(\(\)\s*,\s*\{'([^']+)':\s*\{'caller':\s*'([^']+)',\s*'talkto':\s*'([^']+)',\s*'messages':\s*\[([^\]]+)\]"
+            matches3 = re.findall(pattern3, entry)
+            
+            if matches3:
+                agent_name, caller, talkto, messages_str = matches3[0]
+                # Extract simple string message
+                quoted_match = re.search(r"'([^']*)'", messages_str)
+                message = quoted_match.group(1) if quoted_match else "Processing request..."
+                
+                return {
+                    'caller': caller,
+                    'talkto': talkto,
+                    'message': message,
+                    'timestamp': datetime.now().isoformat()
+                }
+            
+            # Pattern 4: Check for agent responses with tool calls (these are internal processing)
+            # These don't represent communication between agents, so we skip them
+            if "tool_calls" in entry or "ToolMessage" in entry or "AIMessage" in entry:
+                return None
+            
+            return None
+        except Exception as e:
+            print(f"Error parsing communication entry: {e}")
+            return None
+    
+    def get_communication_data(self):
+        """Return all parsed communication data"""
+        return self.communication_data
+    
+    def get_communication_flow(self):
+        """Return communication flow for visualization"""
+        flow = []
+        for comm in self.communication_data:
+            if comm:
+                # Map "Checker" to "User" for visualization
+                caller = "User" if comm['caller'] == "Checker" else comm['caller']
+                talkto = "User" if comm['talkto'] == "Checker" else comm['talkto']
+                
+                flow.append({
+                    'caller': caller,
+                    'talkto': talkto,
+                    'message': comm['message'],
+                    'timestamp': comm['timestamp']
+                })
+        return flow
+
 # Mock supervisor class - this will be replaced with your actual supervisor
 class MockSupervisor:
     def __init__(self):
@@ -175,8 +340,176 @@ class MockSupervisor:
         else:
             return f"Thank you for your network planning query: '{user_input}'. As Huawei Network Planning AI Assistant, for Etisalat (e&), I can help you with comprehensive network analysis, optimization recommendations, and technical solutions. In the real implementation, this will come from your actual network planning supervisor with detailed analysis and specific recommendations for your network infrastructure."
 
-# Global supervisor instance
-supervisor = MockSupervisor()
+# Real supervisor integration class for LangGraph
+class RealSupervisor:
+    def __init__(self):
+        self.communication_parser = CommunicationParser()
+        # You'll need to import and initialize your actual LangGraph supervisor here
+        # self.your_langgraph_supervisor = YourLangGraphSupervisor()
+    
+    def process_user_input(self, user_input, show_thoughts=False):
+        """
+        Process user input with real LangGraph supervisor
+        This method will be called by the Flask app when a message is received
+        
+        Args:
+            user_input: The user's message
+            show_thoughts: Whether to show intermediate thoughts
+            
+        Yields:
+            Dictionary with response data for the frontend
+        """
+        # Reset communication data for new conversation
+        self.communication_parser.reset_communications()
+        
+        try:
+            # TODO: Replace this with your actual LangGraph supervisor initialization
+            # workflow = self.your_langgraph_supervisor.graph.compile()
+            
+            # For now, we'll simulate the LangGraph workflow
+            # In your real implementation, you would do:
+            # for s in workflow.stream({"user_input": user_input}):
+            
+            # Simulate LangGraph streaming (replace this with your actual implementation)
+            simulated_responses = self._simulate_langgraph_streaming(user_input)
+            
+            for response in simulated_responses:
+                # Extract communication data from LangGraph response
+                communication_data = self._extract_communication_from_langgraph(response)
+                
+                if communication_data:
+                    # Add to communication parser for visualization
+                    self.communication_parser.add_communication_entry(communication_data)
+                
+                # Yield response for frontend
+                yield {
+                    'type': 'thought' if show_thoughts else 'response',
+                    'content': response.get('content', 'Processing...'),
+                    'timestamp': datetime.now().isoformat(),
+                    'metadata': {
+                        'communication_data': communication_data
+                    }
+                }
+                
+                # Small delay for smooth streaming
+                socketio.sleep(0.5)
+            
+            # Final response
+            yield {
+                'type': 'final_response',
+                'content': 'Processing complete. Check the visualization for agent communication flow.',
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            print(f"Error in LangGraph supervisor: {e}")
+            yield {
+                'type': 'error',
+                'content': f"Error processing request: {str(e)}",
+                'timestamp': datetime.now().isoformat()
+            }
+    
+    def _extract_communication_from_langgraph(self, langgraph_response):
+        """
+        Extract communication data from LangGraph response
+        This method should be customized based on your LangGraph response format
+        
+        Args:
+            langgraph_response: Response from your LangGraph workflow
+            
+        Returns:
+            Dictionary with 'caller', 'talkto', 'message' or None
+        """
+        try:
+            # TODO: Customize this based on your LangGraph response structure
+            # Your LangGraph response might look like:
+            # {
+            #     'agent_name': 'Supervisor',
+            #     'caller': 'Supervisor',
+            #     'talkto': 'NBI Agent',
+            #     'message': 'Requesting node information...',
+            #     'step': 'communication'
+            # }
+            
+            # For now, we'll simulate the extraction
+            if 'agent_name' in langgraph_response:
+                return {
+                    'caller': langgraph_response.get('caller', langgraph_response['agent_name']),
+                    'talkto': langgraph_response.get('talkto', 'Next Agent'),
+                    'message': langgraph_response.get('message', 'Processing request...'),
+                    'timestamp': datetime.now().isoformat()
+                }
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error extracting communication data: {e}")
+            return None
+    
+    def _simulate_langgraph_streaming(self, user_input):
+        """
+        Simulate LangGraph streaming responses
+        Replace this with your actual LangGraph workflow.stream() call
+        
+        Args:
+            user_input: User's input message
+            
+        Yields:
+            Simulated LangGraph responses
+        """
+        # This is a simulation - replace with your actual LangGraph workflow
+        simulated_steps = [
+            {
+                'agent_name': 'Supervisor',
+                'caller': 'Supervisor',
+                'talkto': 'NBI Agent',
+                'message': f'Processing user request: {user_input}',
+                'content': 'Analyzing network requirements...'
+            },
+            {
+                'agent_name': 'NBI Agent',
+                'caller': 'NBI Agent',
+                'talkto': 'Supervisor',
+                'message': 'Retrieved node information',
+                'content': 'Node data collected successfully'
+            },
+            {
+                'agent_name': 'Supervisor',
+                'caller': 'Supervisor',
+                'talkto': 'Plan Agent',
+                'message': 'Requesting network planning',
+                'content': 'Planning network configuration...'
+            },
+            {
+                'agent_name': 'Plan Agent',
+                'caller': 'Plan Agent',
+                'talkto': 'DT Agent',
+                'message': 'Requesting tunnel configuration',
+                'content': 'Configuring data tunnels...'
+            },
+            {
+                'agent_name': 'DT Agent',
+                'caller': 'DT Agent',
+                'talkto': 'Tunnel Operator',
+                'message': 'Setting up tunnel operations',
+                'content': 'Tunnel setup in progress...'
+            },
+            {
+                'agent_name': 'Tunnel Operator',
+                'caller': 'Tunnel Operator',
+                'talkto': '__end__',
+                'message': 'Tunnel configuration complete',
+                'content': 'Network planning completed successfully!'
+            }
+        ]
+        
+        for step in simulated_steps:
+            yield step
+            # Simulate processing time
+            socketio.sleep(1)
+
+# Global supervisor instance - change this to RealSupervisor() when integrating with your LangGraph
+supervisor = MockSupervisor()  # TODO: Change to RealSupervisor() for production
 
 @app.route('/')
 def index():
@@ -211,6 +544,84 @@ def logout():
 def dashboard():
     """Main dashboard page (current chat interface)"""
     return render_template('dashboard.html', username=session.get('user_id'))
+
+@app.route('/visualization')
+@login_required
+def visualization():
+    """AI Agent Communication Flow Visualization page"""
+    return render_template('visualization.html', username=session.get('user_id'))
+
+@app.route('/api/communication-data')
+@login_required
+def get_communication_data():
+    """API endpoint to get communication data for visualization"""
+    try:
+        communication_parser = CommunicationParser()
+        flow_data = communication_parser.get_communication_flow()
+        return jsonify(flow_data)
+    except Exception as e:
+        print(f"Error getting communication data: {e}")
+        return jsonify([])
+
+@app.route('/api/trigger-visualization')
+@login_required
+def trigger_visualization():
+    """API endpoint to trigger visualization with real communication data"""
+    try:
+        communication_parser = CommunicationParser()
+        flow_data = communication_parser.get_communication_flow()
+        return jsonify({
+            'success': True,
+            'communication_data': flow_data
+        })
+    except Exception as e:
+        print(f"Error triggering visualization: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+@app.route('/api/latest-communications')
+@login_required
+def get_latest_communications():
+    """API endpoint to get latest communication data for real-time updates"""
+    try:
+        # Get the communication parser from the supervisor
+        if hasattr(supervisor, 'communication_parser'):
+            communication_parser = supervisor.communication_parser
+        else:
+            communication_parser = CommunicationParser()
+        
+        # Get latest communications (last 10 entries for real-time updates)
+        latest_communications = communication_parser.get_latest_communications(count=10)
+        
+        # Convert to flow format for visualization
+        flow_data = []
+        for comm in latest_communications:
+            if comm:
+                # Map "Checker" to "User" for visualization
+                caller = "User" if comm['caller'] == "Checker" else comm['caller']
+                talkto = "User" if comm['talkto'] == "Checker" else comm['talkto']
+                
+                flow_data.append({
+                    'caller': caller,
+                    'talkto': talkto,
+                    'message': comm['message'],
+                    'timestamp': comm['timestamp']
+                })
+        
+        return jsonify({
+            'success': True,
+            'communication_data': flow_data,
+            'total_entries': len(communication_parser.communication_data)
+        })
+    except Exception as e:
+        print(f"Error getting latest communications: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'communication_data': []
+        })
 
 @app.route('/health')
 def health_check():

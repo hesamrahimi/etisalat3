@@ -1,4 +1,4 @@
-// Enhanced Chat Interface with Modern Interactions and Sidebar Navigation
+// Enhanced Chat Interface with Modern Interactions, Sidebar Navigation, and Advanced Features
 class ModernChatInterface {
     constructor() {
         this.socket = io();
@@ -17,16 +17,36 @@ class ModernChatInterface {
         this.clearHistoryBtn = document.getElementById('clear-history-btn');
         this.quickActionBtns = document.querySelectorAll('.quick-action-btn');
         
+        // Settings elements
+        this.settingsToggle = document.getElementById('settings-toggle');
+        this.settingsContent = document.getElementById('settings-content');
+        this.themeToggle = document.getElementById('theme-toggle');
+        this.exportTxtBtn = document.getElementById('export-txt-btn');
+        this.exportPdfBtn = document.getElementById('export-pdf-btn');
+        this.typingNotifications = document.getElementById('typing-notifications');
+        this.autoScroll = document.getElementById('auto-scroll');
+        this.previewLength = document.getElementById('preview-length');
+        this.autoSave = document.getElementById('auto-save');
+        
+        // History elements
+        this.historyToggle = document.getElementById('history-toggle');
+        this.historyContent = document.getElementById('history-content');
+        
         this.isTyping = false;
         this.typingTimeout = null;
         this.isProcessing = false;
         this.conversationHistory = [];
         this.currentConversationId = this.generateConversationId();
+        this.searchResults = [];
+        this.settings = this.loadSettings();
+        this.autoSaveInterval = null;
         
         this.initializeEventListeners();
         this.setupSocketEvents();
         this.initializeUI();
         this.initializeSidebar();
+        this.initializeSettings();
+        this.startAutoSave();
     }
 
     initializeEventListeners() {
@@ -44,8 +64,8 @@ class ModernChatInterface {
 
         // Enter key handling with shift+enter for new line
         this.messageInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
                 this.sendMessage();
             }
         });
@@ -77,6 +97,46 @@ class ModernChatInterface {
             this.clearConversationHistory();
         });
 
+        // Settings functionality
+        this.settingsToggle.addEventListener('click', () => {
+            this.toggleSettings();
+        });
+
+        this.themeToggle.addEventListener('change', () => {
+            this.toggleTheme();
+        });
+
+        this.exportTxtBtn.addEventListener('click', () => {
+            this.exportConversation('txt');
+        });
+
+        this.exportPdfBtn.addEventListener('click', () => {
+            this.exportConversation('pdf');
+        });
+
+        // History functionality
+        this.historyToggle.addEventListener('click', () => {
+            this.toggleHistory();
+        });
+
+        // Settings change listeners
+        this.typingNotifications.addEventListener('change', () => {
+            this.updateSettings();
+        });
+
+        this.autoScroll.addEventListener('change', () => {
+            this.updateSettings();
+        });
+
+        this.previewLength.addEventListener('change', () => {
+            this.updateSettings();
+        });
+
+        this.autoSave.addEventListener('change', () => {
+            this.updateSettings();
+            this.startAutoSave();
+        });
+
         // Close sidebar when clicking outside on mobile
         document.addEventListener('click', (e) => {
             if (window.innerWidth <= 1024) {
@@ -89,12 +149,12 @@ class ModernChatInterface {
 
     setupSocketEvents() {
         this.socket.on('connect', () => {
-            console.log('Connected to server');
+    console.log('Connected to server');
             this.updateStatus('Connected', 'success');
-        });
+});
 
         this.socket.on('disconnect', () => {
-            console.log('Disconnected from server');
+    console.log('Disconnected from server');
             this.updateStatus('Disconnected', 'error');
         });
 
@@ -119,6 +179,9 @@ class ModernChatInterface {
         
         // Add loading animation to send button
         this.addButtonAnimations();
+        
+        // Apply saved theme
+        this.applyTheme();
     }
 
     initializeSidebar() {
@@ -130,6 +193,15 @@ class ModernChatInterface {
         
         // Set up history item event listeners
         this.setupHistoryEventListeners();
+    }
+
+    initializeSettings() {
+        // Apply saved settings to UI
+        this.themeToggle.checked = this.settings.theme === 'light';
+        this.typingNotifications.checked = this.settings.typingNotifications;
+        this.autoScroll.checked = this.settings.autoScroll;
+        this.previewLength.value = this.settings.previewLength;
+        this.autoSave.value = this.settings.autoSaveInterval;
     }
 
     handleInputChange(e) {
@@ -173,9 +245,12 @@ class ModernChatInterface {
         this.updateStatus('Sending...', 'info');
         this.showTypingIndicator();
 
+        // Trigger visualization if visualization page is open
+        this.triggerVisualization();
+
         // Emit message to server (don't display immediately)
         this.socket.emit('send_message', {
-            message: message,
+        message: message,
             show_thoughts: this.thoughtsToggle.checked
         });
 
@@ -185,6 +260,124 @@ class ModernChatInterface {
         this.sendButton.disabled = true;
         this.updateCharCount();
         this.isTyping = false;
+    }
+
+    async triggerVisualization() {
+        try {
+            // Get real communication data from server
+            const response = await fetch('/api/trigger-visualization');
+            const data = await response.json();
+            
+            if (data.success && data.communication_data.length > 0) {
+                // Check if visualization page is open by trying to access it
+                let visualizationWindow = null;
+                try {
+                    visualizationWindow = window.open('', 'visualization');
+                    if (visualizationWindow && !visualizationWindow.closed) {
+                        // Check if the window has the correct URL
+                        if (visualizationWindow.location.href.includes('/visualization')) {
+                            // Send message to existing visualization window
+                            visualizationWindow.postMessage({
+                                type: 'start_visualization',
+                                communicationData: data.communication_data
+                            }, '*');
+                            return;
+                        } else {
+                            // Close the wrong window
+                            visualizationWindow.close();
+                        }
+                    }
+                } catch (e) {
+                    // Window is blocked or doesn't exist
+                }
+                
+                // Open new visualization window
+                const newWindow = window.open('/visualization', 'visualization', 'width=1200,height=800');
+                if (newWindow) {
+                    // Wait a bit for the window to load, then send the message
+                    setTimeout(() => {
+                        newWindow.postMessage({
+                            type: 'start_visualization',
+                            communicationData: data.communication_data
+                        }, '*');
+                    }, 1000);
+                }
+            }
+        } catch (error) {
+            console.error('Error triggering visualization:', error);
+        }
+    }
+
+    getCommunicationData() {
+        // This would typically come from the server
+        // For now, we'll use a sample flow based on the logs_new.txt structure
+        return [
+            {
+                caller: 'Supervisor',
+                talkto: 'NBI Agent',
+                message: 'Extract and translate node names and TP locations to UUIDs'
+            },
+            {
+                caller: 'NBI Agent',
+                talkto: 'Supervisor',
+                message: 'Node UUIDs and TP UUIDs extracted successfully'
+            },
+            {
+                caller: 'Supervisor',
+                talkto: 'Plan Agent',
+                message: 'Pass UUIDs to Plan Agent for OCh planning'
+            },
+            {
+                caller: 'Plan Agent',
+                talkto: 'NBI Agent',
+                message: 'Request NBI Agent to plan OCh on NCE'
+            },
+            {
+                caller: 'NBI Agent',
+                talkto: 'Plan Agent',
+                message: 'NCE OCh planning completed'
+            },
+            {
+                caller: 'Plan Agent',
+                talkto: 'DT Agent',
+                message: 'Request DT Agent to plan OCh on OPE'
+            },
+            {
+                caller: 'DT Agent',
+                talkto: 'Plan Agent',
+                message: 'OPE OCh planning completed'
+            },
+            {
+                caller: 'Plan Agent',
+                talkto: 'Tunnel Operator',
+                message: 'Request Tunnel Operator to create OCh'
+            },
+            {
+                caller: 'Tunnel Operator',
+                talkto: 'DT Agent',
+                message: 'Create OCh on OPE using DT Agent'
+            },
+            {
+                caller: 'DT Agent',
+                talkto: 'Tunnel Operator',
+                message: 'OPE OCh created successfully'
+            },
+            {
+                caller: 'Tunnel Operator',
+                talkto: 'NBI Agent',
+                message: 'Create OCh on NCE using NBI Agent'
+            },
+            {
+                caller: 'NBI Agent',
+                talkto: 'Tunnel Operator',
+                message: 'NCE OCh created successfully'
+            },
+            {
+                caller: 'Tunnel Operator',
+                talkto: '__end__',
+                message: 'Task completed successfully'
+            }
+        ];
     }
 
     handleQuickAction(query) {
@@ -216,35 +409,44 @@ class ModernChatInterface {
     }
 
     displayMessage(data) {
-        const messageDiv = document.createElement('div');
+    const messageDiv = document.createElement('div');
         messageDiv.className = `message ${data.sender === 'user' ? 'user-message' : 'ai-message'}`;
-        
+    
         // Add specific classes for different message types
         if (data.type === 'thought') {
-            messageDiv.classList.add('thought-message');
+        messageDiv.classList.add('thought-message');
         } else if (data.type === 'final_response') {
             messageDiv.classList.add('final-response');
-        }
-
+    }
+    
         const timestamp = this.formatTimestamp(data.timestamp);
-        
-        messageDiv.innerHTML = `
+        const statusIcon = this.getStatusIcon(data);
+    
+    messageDiv.innerHTML = `
             <div class="message-avatar">
                 <i class="fas ${data.sender === 'user' ? 'fa-user' : 'fa-robot'}"></i>
-            </div>
-            <div class="message-content">
-                <div class="message-text">
+        </div>
+        <div class="message-content">
+            <div class="message-text">
                     ${this.formatMessageContent(data.content, data.type)}
-                </div>
-                <div class="message-timestamp">
-                    <i class="fas fa-clock"></i>
+            </div>
+            <div class="message-timestamp">
+                <i class="fas fa-clock"></i>
                     <span>${timestamp}</span>
                 </div>
+                ${statusIcon ? `<div class="message-status">
+                    <i class="fas ${statusIcon} status-icon ${data.status || 'sent'}"></i>
+                    <span>${data.status || 'sent'}</span>
+                </div>` : ''}
             </div>
         `;
         
         this.chatMessages.appendChild(messageDiv);
-        this.scrollToBottom();
+        
+        // Auto-scroll if enabled
+        if (this.settings.autoScroll) {
+            this.scrollToBottom();
+        }
         
         // Add hover effects
         this.addMessageHoverEffects(messageDiv);
@@ -286,6 +488,13 @@ class ModernChatInterface {
         }
     }
 
+    getStatusIcon(data) {
+        if (data.sender === 'user') {
+            return 'fa-check';
+        }
+        return null;
+    }
+
     scrollToBottom() {
         const scrollOptions = {
             top: this.chatMessages.scrollHeight,
@@ -299,17 +508,51 @@ class ModernChatInterface {
     }
 
     showTypingIndicator() {
+        if (!this.settings.typingNotifications) return;
+        
         this.statusIndicator.textContent = 'AI is thinking...';
         this.statusIndicator.classList.add('typing');
         
         // Add typing animation to send button
         this.sendButton.classList.add('processing');
+        
+        // Show enhanced typing indicator
+        this.showEnhancedTypingIndicator();
+    }
+
+    showEnhancedTypingIndicator() {
+        const typingDiv = document.createElement('div');
+        typingDiv.className = 'typing-indicator';
+        typingDiv.innerHTML = `
+            <div class="message-avatar">
+                <i class="fas fa-robot"></i>
+            </div>
+            <div class="message-content">
+                <div class="typing-dots">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+            </div>
+        </div>
+    `;
+    
+        this.chatMessages.appendChild(typingDiv);
+        this.scrollToBottom();
+        
+        // Store reference to remove later
+        this.currentTypingIndicator = typingDiv;
     }
 
     hideTypingIndicator() {
         this.statusIndicator.textContent = 'Ready';
         this.statusIndicator.classList.remove('typing');
         this.sendButton.classList.remove('processing');
+        
+        // Remove enhanced typing indicator
+        if (this.currentTypingIndicator) {
+            this.currentTypingIndicator.remove();
+            this.currentTypingIndicator = null;
+        }
     }
 
     updateStatus(message, type) {
@@ -320,7 +563,7 @@ class ModernChatInterface {
     updateWelcomeTime() {
         const now = new Date();
         const timeString = now.toLocaleTimeString([], { 
-            hour: '2-digit', 
+        hour: '2-digit',
             minute: '2-digit' 
         });
         this.welcomeTime.textContent = timeString;
@@ -377,6 +620,159 @@ class ModernChatInterface {
         this.sidebar.classList.remove('open');
     }
 
+    // Settings functionality
+    toggleSettings() {
+        this.settingsContent.classList.toggle('expanded');
+        this.settingsToggle.classList.toggle('expanded');
+    }
+
+    toggleTheme() {
+        const isLight = this.themeToggle.checked;
+        this.settings.theme = isLight ? 'light' : 'dark';
+        this.applyTheme();
+        this.saveSettings();
+    }
+
+    applyTheme() {
+        if (this.settings.theme === 'light') {
+            document.body.classList.add('light-theme');
+        } else {
+            document.body.classList.remove('light-theme');
+        }
+    }
+
+    updateSettings() {
+        this.settings.typingNotifications = this.typingNotifications.checked;
+        this.settings.autoScroll = this.autoScroll.checked;
+        this.settings.previewLength = parseInt(this.previewLength.value);
+        this.settings.autoSaveInterval = parseInt(this.autoSave.value);
+        
+        this.saveSettings();
+    }
+
+    loadSettings() {
+        try {
+            const saved = localStorage.getItem('chatSettings');
+            return saved ? JSON.parse(saved) : this.getDefaultSettings();
+        } catch (error) {
+            console.error('Error loading settings:', error);
+            return this.getDefaultSettings();
+        }
+    }
+
+    saveSettings() {
+        try {
+            localStorage.setItem('chatSettings', JSON.stringify(this.settings));
+        } catch (error) {
+            console.error('Error saving settings:', error);
+        }
+    }
+
+    getDefaultSettings() {
+        return {
+            theme: 'dark',
+            typingNotifications: true,
+            autoScroll: true,
+            previewLength: 100,
+            autoSaveInterval: 10
+        };
+    }
+
+    // Export functionality
+    exportConversation(format) {
+        const conversation = this.conversationHistory.find(c => c.id === this.currentConversationId);
+        if (!conversation) {
+            alert('No conversation to export');
+            return;
+        }
+
+        if (format === 'txt') {
+            this.exportAsTxt(conversation);
+        } else if (format === 'pdf') {
+            this.exportAsPdf(conversation);
+        }
+    }
+
+    exportAsTxt(conversation) {
+        let content = `Huawei Network Planning AI Assistant - Conversation Export\n`;
+        content += `Date: ${new Date().toLocaleString()}\n`;
+        content += `Conversation: ${conversation.title}\n\n`;
+        content += `Messages:\n\n`;
+
+        conversation.messages.forEach(message => {
+            const sender = message.sender === 'user' ? 'User' : 'AI Assistant';
+            const timestamp = new Date(message.timestamp).toLocaleString();
+            content += `[${timestamp}] ${sender}:\n${message.content}\n\n`;
+        });
+
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `conversation-${conversation.id}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    exportAsPdf(conversation) {
+        // Simple PDF export using browser print functionality
+        const printWindow = window.open('', '_blank');
+        let content = `
+            <html>
+            <head>
+                <title>Conversation Export</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 20px; }
+                    .header { text-align: center; margin-bottom: 30px; }
+                    .message { margin-bottom: 20px; padding: 10px; border-left: 3px solid #7c3aed; }
+                    .user { background: #f3f4f6; }
+                    .ai { background: #f9fafb; }
+                    .timestamp { color: #6b7280; font-size: 12px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>Huawei Network Planning AI Assistant</h1>
+                    <h2>Conversation Export</h2>
+                    <p>Date: ${new Date().toLocaleString()}</p>
+                    <p>Conversation: ${conversation.title}</p>
+                </div>
+        `;
+
+        conversation.messages.forEach(message => {
+            const sender = message.sender === 'user' ? 'User' : 'AI Assistant';
+            const timestamp = new Date(message.timestamp).toLocaleString();
+            const messageClass = message.sender === 'user' ? 'user' : 'ai';
+            
+            content += `
+                <div class="message ${messageClass}">
+                    <div class="timestamp">[${timestamp}] ${sender}</div>
+                    <div>${message.content.replace(/\n/g, '<br>')}</div>
+                </div>
+            `;
+        });
+
+        content += '</body></html>';
+        
+        printWindow.document.write(content);
+        printWindow.document.close();
+        printWindow.print();
+    }
+
+    // Auto-save functionality
+    startAutoSave() {
+        if (this.autoSaveInterval) {
+            clearInterval(this.autoSaveInterval);
+        }
+
+        const interval = this.settings.autoSaveInterval * 60 * 1000; // Convert to milliseconds
+        this.autoSaveInterval = setInterval(() => {
+            this.saveConversationHistory();
+        }, interval);
+    }
+
+
+
     // Conversation history functionality
     generateConversationId() {
         return Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -391,19 +787,19 @@ class ModernChatInterface {
                 // Create new conversation
                 this.conversationHistory.unshift({
                     id: this.currentConversationId,
-                    title: data.sender === 'user' ? data.content.substring(0, 50) + '...' : 'New Conversation',
-                    preview: data.content.substring(0, 100) + '...',
+                    title: data.sender === 'user' ? data.content.substring(0, this.settings.previewLength) + '...' : 'New Conversation',
+                    preview: data.content.substring(0, this.settings.previewLength) + '...',
                     timestamp: data.timestamp,
                     messages: [data]
                 });
             } else {
                 // Update existing conversation
                 conversation.messages.push(data);
-                conversation.preview = data.content.substring(0, 100) + '...';
+                conversation.preview = data.content.substring(0, this.settings.previewLength) + '...';
                 conversation.timestamp = data.timestamp;
                 
                 if (data.sender === 'user') {
-                    conversation.title = data.content.substring(0, 50) + '...';
+                    conversation.title = data.content.substring(0, this.settings.previewLength) + '...';
                 }
             }
             
@@ -571,6 +967,17 @@ class ModernChatInterface {
             console.error('Error loading conversation history:', error);
             this.conversationHistory = [];
         }
+    }
+
+    toggleHistory() {
+        this.historyContent.classList.toggle('expanded');
+        this.historyToggle.classList.toggle('expanded');
+    }
+
+    // Settings functionality
+    toggleSettings() {
+        this.settingsContent.classList.toggle('expanded');
+        this.settingsToggle.classList.toggle('expanded');
     }
 }
 

@@ -423,6 +423,74 @@
                         this.startVisualization(event.data.communicationData);
                     }
                 });
+                
+                // Start real-time polling for latest communications
+                this.startRealTimePolling();
+            }
+            
+            startRealTimePolling() {
+                // Poll for latest communications every 2 seconds
+                this.pollingInterval = setInterval(() => {
+                    this.pollLatestCommunications();
+                }, 2000);
+            }
+            
+            async pollLatestCommunications() {
+                try {
+                    const response = await fetch('/api/latest-communications');
+                    const data = await response.json();
+                    
+                    if (data.success && data.communication_data.length > 0) {
+                        // Update communication data with latest entries
+                        this.updateCommunicationData(data.communication_data);
+                        
+                        // If visualization is not currently playing, update the display
+                        if (!this.isPlaying) {
+                            this.updateVisualizationWithLatestData(data.communication_data);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error polling latest communications:', error);
+                }
+            }
+            
+            updateCommunicationData(newData) {
+                // Merge new data with existing data, avoiding duplicates
+                const existingIds = new Set(this.communicationData.map(item => 
+                    `${item.caller}-${item.talkto}-${item.message}`
+                ));
+                
+                newData.forEach(item => {
+                    const itemId = `${item.caller}-${item.talkto}-${item.message}`;
+                    if (!existingIds.has(itemId)) {
+                        this.communicationData.push(item);
+                        existingIds.add(itemId);
+                    }
+                });
+            }
+            
+            updateVisualizationWithLatestData(latestData) {
+                // Update the communication log with latest entries
+                latestData.forEach(comm => {
+                    this.addLogEntry(comm.caller, comm.talkto, comm.message);
+                });
+                
+                // Update the total count display if available
+                const totalCount = this.communicationData.length;
+                console.log(`Total communication entries: ${totalCount}`);
+            }
+            
+            stopRealTimePolling() {
+                if (this.pollingInterval) {
+                    clearInterval(this.pollingInterval);
+                    this.pollingInterval = null;
+                    console.log('Real-time polling stopped');
+                }
+            }
+            
+            // Cleanup when page is unloaded
+            cleanup() {
+                this.stopRealTimePolling();
             }
 
             async loadCommunicationData() {
@@ -686,7 +754,12 @@
 
         // Initialize the visualizer when the page loads
         document.addEventListener('DOMContentLoaded', () => {
-            new AgentCommunicationVisualizer();
+            const visualizer = new AgentCommunicationVisualizer();
+            
+            // Cleanup when page is unloaded
+            window.addEventListener('beforeunload', () => {
+                visualizer.cleanup();
+            });
         });
     </script>
 </body>

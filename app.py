@@ -100,11 +100,13 @@ class LogParser:
 
 # Communication parser class to handle the logs_new.txt format
 class CommunicationParser:
-    def __init__(self, log_file_path='logs_new.txt'):
+    def __init__(self, log_file_path='logs_new.txt', load_file=True):
         self.log_file_path = log_file_path
         self.communication_data = []
-        # For real-time integration, we'll add entries as they come
-        self._parse_communications()
+        # Only parse communications if load_file is True (for MockSupervisor)
+        # For RealSupervisor, we'll start with empty data and add entries incrementally
+        if load_file:
+            self._parse_communications()
     
     def _parse_communications(self):
         """Parse the logs_new.txt file and extract communication data"""
@@ -118,18 +120,15 @@ class CommunicationParser:
             print(f"Error reading communication log file: {e}")
             return
         
-        # Split by the separator "----"
+        # Split by the separator
         log_entries = content.split('----')
         
         for entry in log_entries:
             entry = entry.strip()
-            if not entry:
-                continue
-            
-            # Extract communication data
-            communication = self._extract_communication_data(entry)
-            if communication:
-                self.communication_data.append(communication)
+            if entry:
+                communication = self._extract_communication_data(entry)
+                if communication:
+                    self.communication_data.append(communication)
     
     def add_communication_entry(self, entry_data):
         """
@@ -269,36 +268,48 @@ class MockSupervisor:
         self.log_parser = LogParser()
     
     def process_user_input(self, user_input, show_thoughts=False):
-        """
-        Mock supervisor that yields thoughts from logs.txt and final response
-        This will be replaced with your actual supervisor integration
-        """
-        # Reset the log parser index for new conversation
-        self.log_parser.reset_index()
-        
-        # Simulate thinking process with thoughts from logs.txt
-        thoughts = self.log_parser.get_thoughts()
-        
-        # Stream thoughts from the logs
-        for i, thought in enumerate(thoughts):
-            if show_thoughts and thought:
-                yield {
-                    'type': 'thought',
-                    'content': thought,
-                    'timestamp': datetime.now().isoformat(),
-                    'thought_number': i + 1,
-                    'total_thoughts': len(thoughts)
+        """Process user input and yield responses"""
+        try:
+            # Generate response
+            response = self._generate_response(user_input)
+            
+            if show_thoughts:
+                # Get thoughts from log parser
+                thoughts = self.log_parser.get_thoughts()
+                
+                # Yield each thought
+                for i, thought in enumerate(thoughts):
+                    yield {
+                        'type': 'thought',
+                        'content': thought,
+                        'timestamp': datetime.now().isoformat(),
+                        'thought_number': i + 1,
+                        'metadata': {
+                            'communication_data': None  # MockSupervisor doesn't have real communication data
+                        }
+                    }
+                    socketio.sleep(1)  # Delay between thoughts
+            
+            # Yield final response
+            yield {
+                'type': 'response',
+                'content': response,
+                'timestamp': datetime.now().isoformat(),
+                'metadata': {
+                    'communication_data': None  # MockSupervisor doesn't have real communication data
                 }
-                time.sleep(random.uniform(0.5, 1.2))  # Variable processing time
-        
-        # Generate contextual final response
-        final_response = self._generate_response(user_input)
-        
-        yield {
-            'type': 'final_response',
-            'content': final_response,
-            'timestamp': datetime.now().isoformat()
-        }
+            }
+            
+        except Exception as e:
+            print(f"Error in mock supervisor: {e}")
+            yield {
+                'type': 'error',
+                'content': f"Error processing request: {str(e)}",
+                'timestamp': datetime.now().isoformat(),
+                'metadata': {
+                    'communication_data': None
+                }
+            }
     
     def _generate_response(self, user_input):
         """Generate contextual responses based on user input"""
@@ -343,7 +354,9 @@ class MockSupervisor:
 # Real supervisor integration class for LangGraph
 class RealSupervisor:
     def __init__(self):
-        self.communication_parser = CommunicationParser()
+        # Don't initialize CommunicationParser here - it will be created when needed
+        # for real-time communication tracking
+        self.communication_parser = None
         # You'll need to import and initialize your actual LangGraph supervisor here
         # self.your_langgraph_supervisor = YourLangGraphSupervisor()
     
@@ -359,10 +372,14 @@ class RealSupervisor:
         Yields:
             Dictionary with response data for the frontend
         """
-        # Reset communication data for new conversation
-        self.communication_parser.reset_communications()
-        
         try:
+            # Initialize communication parser for this conversation (empty, no file reading)
+            if not self.communication_parser:
+                self.communication_parser = CommunicationParser(load_file=False)
+            
+            # Reset communication data for new conversation
+            self.communication_parser.reset_communications()
+            
             # TODO: Replace this with your actual LangGraph supervisor initialization
             # workflow = self.your_langgraph_supervisor.graph.compile()
             
@@ -371,9 +388,13 @@ class RealSupervisor:
             # for s in workflow.stream({"user_input": user_input}):
             
             # Simulate LangGraph streaming (replace this with your actual implementation)
-            simulated_responses = self._simulate_langgraph_streaming(user_input)
+            # For true streaming, we'll count as we go instead of converting to list
+            step_count = 0
             
-            for response in simulated_responses:
+            # Simulate LangGraph streaming with thoughts
+            for i, response in enumerate(self._simulate_langgraph_streaming(user_input)):
+                step_count += 1
+                
                 # Extract communication data from LangGraph response
                 communication_data = self._extract_communication_from_langgraph(response)
                 
@@ -381,24 +402,33 @@ class RealSupervisor:
                     # Add to communication parser for visualization
                     self.communication_parser.add_communication_entry(communication_data)
                 
-                # Yield response for frontend
-                yield {
-                    'type': 'thought' if show_thoughts else 'response',
-                    'content': response.get('content', 'Processing...'),
-                    'timestamp': datetime.now().isoformat(),
-                    'metadata': {
-                        'communication_data': communication_data
+                # Only yield thoughts if show_thoughts is True (like MockSupervisor)
+                if show_thoughts:
+                    # Extract actual thought content from LangGraph response (same as LogParser)
+                    thought_content = self._extract_thought_content_from_langgraph(response)
+                    
+                    # Yield thought for frontend (not response)
+                    yield {
+                        'type': 'thought',  # Changed from 'response' to 'thought'
+                        'content': thought_content,
+                        'timestamp': datetime.now().isoformat(),
+                        'thought_number': step_count,  # Current step number
+                        'metadata': {
+                            'communication_data': None  # RealSupervisor doesn't send communication data in yields
+                        }
                     }
-                }
                 
                 # Small delay for smooth streaming
                 socketio.sleep(0.5)
             
-            # Final response
+            # Final response (not a thought)
             yield {
-                'type': 'final_response',
-                'content': 'Processing complete. Check the visualization for agent communication flow.',
-                'timestamp': datetime.now().isoformat()
+                'type': 'response',
+                'content': self._generate_final_response(user_input),
+                'timestamp': datetime.now().isoformat(),
+                'metadata': {
+                    'communication_data': None
+                }
             }
             
         except Exception as e:
@@ -406,45 +436,142 @@ class RealSupervisor:
             yield {
                 'type': 'error',
                 'content': f"Error processing request: {str(e)}",
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now().isoformat(),
+                'metadata': {
+                    'communication_data': None
+                }
             }
     
+    def get_communication_data(self):
+        """
+        Get communication data for visualization
+        Returns empty list if no communication parser is initialized
+        """
+        if self.communication_parser:
+            return self.communication_parser.get_communication_flow()
+        return []
+    
+    def get_latest_communications(self):
+        """
+        Get latest communications for real-time updates
+        Returns empty list if no communication parser is initialized
+        """
+        if self.communication_parser:
+            return self.communication_parser.get_latest_communications()
+        return []
+    
     def _extract_communication_from_langgraph(self, langgraph_response):
-        """
-        Extract communication data from LangGraph response
-        This method should be customized based on your LangGraph response format
+        """Extract communication data from LangGraph response using same regex as MockSupervisor"""
+        import re
         
-        Args:
-            langgraph_response: Response from your LangGraph workflow
-            
-        Returns:
-            Dictionary with 'caller', 'talkto', 'message' or None
-        """
+        # Convert LangGraph response to string for regex parsing
+        response_str = str(langgraph_response)
+        
         try:
-            # TODO: Customize this based on your LangGraph response structure
-            # Your LangGraph response might look like:
-            # {
-            #     'agent_name': 'Supervisor',
-            #     'caller': 'Supervisor',
-            #     'talkto': 'NBI Agent',
-            #     'message': 'Requesting node information...',
-            #     'step': 'communication'
-            # }
+            # Use the EXACT SAME regex patterns as CommunicationParser._extract_communication_data
             
-            # For now, we'll simulate the extraction
-            if 'agent_name' in langgraph_response:
+            # Pattern 1: ((), {'Agent': {'caller': 'X', 'talkto': 'Y', 'messages': [...]}})
+            pattern1 = r"\(\(\)\s*,\s*\{'([^']+)':\s*\{'caller':\s*'([^']+)',\s*'talkto':\s*'([^']+)',\s*'messages':\s*\[([^\]]+)\]"
+            matches1 = re.findall(pattern1, response_str)
+            
+            if matches1:
+                agent_name, caller, talkto, messages_str = matches1[0]
+                # Extract message content
+                content_match = re.search(r"content='([^']*)'", messages_str)
+                if content_match:
+                    message = content_match.group(1)
+                else:
+                    # Fallback: extract any quoted string as message
+                    quoted_match = re.search(r"'([^']*)'", messages_str)
+                    message = quoted_match.group(1) if quoted_match else "Processing request..."
+                
                 return {
-                    'caller': langgraph_response.get('caller', langgraph_response['agent_name']),
-                    'talkto': langgraph_response.get('talkto', 'Next Agent'),
-                    'message': langgraph_response.get('message', 'Processing request...'),
+                    'caller': caller,
+                    'talkto': talkto,
+                    'message': message,
                     'timestamp': datetime.now().isoformat()
                 }
+            
+            # Pattern 2: ((), {'Agent': {'caller': 'X', 'messages': [...], 'talkto': 'Y'}})
+            pattern2 = r"\(\(\)\s*,\s*\{'([^']+)':\s*\{'caller':\s*'([^']+)',\s*'messages':\s*\[([^\]]+)\],\s*'talkto':\s*'([^']+)'"
+            matches2 = re.findall(pattern2, response_str)
+            
+            if matches2:
+                agent_name, caller, messages_str, talkto = matches2[0]
+                # Extract message content
+                content_match = re.search(r"content='([^']*)'", messages_str)
+                if content_match:
+                    message = content_match.group(1)
+                else:
+                    # Fallback: extract any quoted string as message
+                    quoted_match = re.search(r"'([^']*)'", messages_str)
+                    message = quoted_match.group(1) if quoted_match else "Processing request..."
+                
+                return {
+                    'caller': caller,
+                    'talkto': talkto,
+                    'message': message,
+                    'timestamp': datetime.now().isoformat()
+                }
+            
+            # Pattern 3: ((), {'Agent': {'caller': 'X', 'talkto': 'Y', 'messages': ['simple string']}})
+            pattern3 = r"\(\(\)\s*,\s*\{'([^']+)':\s*\{'caller':\s*'([^']+)',\s*'talkto':\s*'([^']+)',\s*'messages':\s*\[([^\]]+)\]"
+            matches3 = re.findall(pattern3, response_str)
+            
+            if matches3:
+                agent_name, caller, talkto, messages_str = matches3[0]
+                # Extract simple string message
+                quoted_match = re.search(r"'([^']*)'", messages_str)
+                message = quoted_match.group(1) if quoted_match else "Processing request..."
+                
+                return {
+                    'caller': caller,
+                    'talkto': talkto,
+                    'message': message,
+                    'timestamp': datetime.now().isoformat()
+                }
+            
+            # Pattern 4: Check for agent responses with tool calls (these are internal processing)
+            # These don't represent communication between agents, so we skip them
+            if "tool_calls" in response_str or "ToolMessage" in response_str or "AIMessage" in response_str:
+                return None
             
             return None
             
         except Exception as e:
-            print(f"Error extracting communication data: {e}")
+            print(f"Error parsing communication from LangGraph response: {e}")
             return None
+    
+    def _extract_thought_content_from_langgraph(self, langgraph_response):
+        """
+        Extract thought content from LangGraph response
+        Uses the exact same logic as LogParser._extract_thought_content
+        """
+        import re
+        
+        # Convert LangGraph response to string for parsing
+        response_str = str(langgraph_response)
+        
+        # Look for HumanMessage patterns (same as LogParser)
+        # Pattern: HumanMessage(content='...', ...)
+        human_message_pattern = r"HumanMessage\(content='([^']*)'"
+        matches = re.findall(human_message_pattern, response_str)
+        
+        if matches:
+            # Return the first HumanMessage content found
+            return matches[0]
+        
+        # If no HumanMessage found, look for any content in quotes that might be a thought
+        # This is a fallback for other message types (same as LogParser)
+        content_pattern = r"content='([^']*)'"
+        matches = re.findall(content_pattern, response_str)
+        
+        if matches:
+            # Return the first content found
+            return matches[0]
+        
+        # If no content found, return a fallback message
+        return f"Processing step: {response_str[:100]}..." if len(response_str) > 100 else response_str
     
     def _simulate_langgraph_streaming(self, user_input):
         """
@@ -508,6 +635,13 @@ class RealSupervisor:
             # Simulate processing time
             socketio.sleep(1)
 
+    def _generate_final_response(self, user_input):
+        """
+        Generate the final response for the RealSupervisor.
+        This is a placeholder and should be replaced with the actual LangGraph response.
+        """
+        return f"Thank you for your network planning query: '{user_input}'. As Huawei Network Planning AI Assistant, for Etisalat (e&), I can help you with comprehensive network analysis, optimization recommendations, and technical solutions. In the real implementation, this will come from your actual network planning supervisor with detailed analysis and specific recommendations for your network infrastructure."
+
 # Global supervisor instance - change this to RealSupervisor() when integrating with your LangGraph
 supervisor = MockSupervisor()  # TODO: Change to RealSupervisor() for production
 
@@ -556,8 +690,18 @@ def visualization():
 def get_communication_data():
     """API endpoint to get communication data for visualization"""
     try:
-        communication_parser = CommunicationParser()
-        flow_data = communication_parser.get_communication_flow()
+        if isinstance(supervisor, MockSupervisor):
+            # For MockSupervisor, use CommunicationParser to read static log file
+            communication_parser = CommunicationParser(load_file=True)
+            flow_data = communication_parser.get_communication_flow()
+        elif isinstance(supervisor, RealSupervisor):
+            # For RealSupervisor, use its own communication tracking
+            flow_data = supervisor.get_communication_data()
+        else:
+            # Fallback for unknown supervisor types
+            print(f"Unknown supervisor type: {type(supervisor)}")
+            flow_data = []
+        
         return jsonify(flow_data)
     except Exception as e:
         print(f"Error getting communication data: {e}")
@@ -566,10 +710,20 @@ def get_communication_data():
 @app.route('/api/trigger-visualization')
 @login_required
 def trigger_visualization():
-    """API endpoint to trigger visualization with real communication data"""
+    """API endpoint to trigger visualization with communication data"""
     try:
-        communication_parser = CommunicationParser()
-        flow_data = communication_parser.get_communication_flow()
+        if isinstance(supervisor, MockSupervisor):
+            # For MockSupervisor, use CommunicationParser to read static log file
+            communication_parser = CommunicationParser(load_file=True)
+            flow_data = communication_parser.get_communication_flow()
+        elif isinstance(supervisor, RealSupervisor):
+            # For RealSupervisor, use its own communication tracking
+            flow_data = supervisor.get_communication_data()
+        else:
+            # Fallback for unknown supervisor types
+            print(f"Unknown supervisor type: {type(supervisor)}")
+            flow_data = []
+        
         return jsonify({
             'success': True,
             'communication_data': flow_data
@@ -584,36 +738,23 @@ def trigger_visualization():
 @app.route('/api/latest-communications')
 @login_required
 def get_latest_communications():
-    """API endpoint to get latest communication data for real-time updates"""
+    """API endpoint to get latest communications for real-time updates"""
     try:
-        # Get the communication parser from the supervisor
-        if hasattr(supervisor, 'communication_parser'):
-            communication_parser = supervisor.communication_parser
+        if isinstance(supervisor, MockSupervisor):
+            # For MockSupervisor, use CommunicationParser to read static log file
+            communication_parser = CommunicationParser(load_file=True)
+            latest_data = communication_parser.get_latest_communications()
+        elif isinstance(supervisor, RealSupervisor):
+            # For RealSupervisor, use its own communication tracking
+            latest_data = supervisor.get_latest_communications()
         else:
-            communication_parser = CommunicationParser()
-        
-        # Get latest communications (last 10 entries for real-time updates)
-        latest_communications = communication_parser.get_latest_communications(count=10)
-        
-        # Convert to flow format for visualization
-        flow_data = []
-        for comm in latest_communications:
-            if comm:
-                # Map "Checker" to "User" for visualization
-                caller = "User" if comm['caller'] == "Checker" else comm['caller']
-                talkto = "User" if comm['talkto'] == "Checker" else comm['talkto']
-                
-                flow_data.append({
-                    'caller': caller,
-                    'talkto': talkto,
-                    'message': comm['message'],
-                    'timestamp': comm['timestamp']
-                })
+            # Fallback for unknown supervisor types
+            print(f"Unknown supervisor type: {type(supervisor)}")
+            latest_data = []
         
         return jsonify({
             'success': True,
-            'communication_data': flow_data,
-            'total_entries': len(communication_parser.communication_data)
+            'communication_data': latest_data
         })
     except Exception as e:
         print(f"Error getting latest communications: {e}")
@@ -669,12 +810,18 @@ def handle_message(data):
     # Process with supervisor (mock for now)
     try:
         for response in supervisor.process_user_input(user_input, show_thoughts):
+            # Extract metadata if present
+            metadata = response.get('metadata', {})
+            
             emit('receive_message', {
                 'type': response['type'],
                 'content': response['content'],
                 'timestamp': response['timestamp'],
                 'sender': 'ai',
-                'metadata': {k: v for k, v in response.items() if k not in ['type', 'content', 'timestamp']}
+                'metadata': metadata,
+                # Include additional fields for frontend compatibility
+                'thought_number': response.get('thought_number'),
+                'total_thoughts': response.get('total_thoughts')
             })
             socketio.sleep(0.1)  # Small delay for smooth streaming
     except Exception as e:

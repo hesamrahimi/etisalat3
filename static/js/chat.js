@@ -41,11 +41,23 @@ class ModernChatInterface {
         this.settings = this.loadSettings();
         this.autoSaveInterval = null;
         
+                    // Visualization state
+            this.visualizationState = {
+                communicationData: [],
+                completedSteps: [],
+                currentStep: 0,
+                logEntries: []
+            };
+            
+            // Animation state
+            this.isAnimating = false;
+        
         this.initializeEventListeners();
         this.setupSocketEvents();
         this.initializeUI();
         this.initializeSidebar();
         this.initializeSettings();
+        this.initializeVisualizationPanel();
         this.startAutoSave();
     }
 
@@ -245,8 +257,8 @@ class ModernChatInterface {
         this.updateStatus('Sending...', 'info');
         this.showTypingIndicator();
 
-        // Trigger visualization if visualization page is open
-        this.triggerVisualization();
+        // Note: Visualization panel is now manually controlled by user
+        // Users can click the "Agent Communication Flow" button to expand the panel
 
         // Emit message to server (don't display immediately)
         this.socket.emit('send_message', {
@@ -401,11 +413,19 @@ class ModernChatInterface {
         this.hideTypingIndicator();
         this.updateStatus('Ready', 'success');
 
-        // Display the message
-        this.displayMessage(data);
-        
-        // Update conversation history
-        this.updateConversationHistory(data);
+        // Add delay for thought messages to sync with backend timing
+        if (data.type === 'thought') {
+            // Match the backend timing: 0.5 seconds for RealSupervisor, 1 second for MockSupervisor
+            // We'll use 1.5 seconds for smoother transitions
+            setTimeout(() => {
+                this.displayMessage(data);
+                this.updateConversationHistory(data);
+            }, 1500); // 1500ms = 1.5 seconds
+        } else {
+            // For non-thought messages (responses, errors), display immediately
+            this.displayMessage(data);
+            this.updateConversationHistory(data);
+        }
     }
 
     displayMessage(data) {
@@ -978,6 +998,673 @@ class ModernChatInterface {
     toggleSettings() {
         this.settingsContent.classList.toggle('expanded');
         this.settingsToggle.classList.toggle('expanded');
+    }
+
+    // Initialize visualization panel functionality
+    initializeVisualizationPanel() {
+        console.log('Initializing visualization panel...');
+        const panel = document.getElementById('visualization-panel');
+        const toggleBtn = document.getElementById('visualization-toggle-btn');
+        const closeBtn = document.getElementById('visualization-close-btn');
+        const loading = document.getElementById('visualization-loading');
+        const container = document.getElementById('visualization-container');
+        const graphContainer = document.getElementById('graph-container');
+        const clearBtn = document.getElementById('clear-btn');
+        
+        console.log('Panel:', panel);
+        console.log('Toggle button:', toggleBtn);
+        console.log('Close button:', closeBtn);
+
+        let isExpanded = false;
+
+        // Toggle panel
+        toggleBtn.addEventListener('click', () => {
+            console.log('Visualization button clicked!');
+            if (!isExpanded) {
+                this.expandVisualizationPanel();
+            } else {
+                this.collapseVisualizationPanel();
+            }
+        });
+
+        // Close panel
+        closeBtn.addEventListener('click', () => {
+            this.collapseVisualizationPanel();
+        });
+
+        // Close on escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && isExpanded) {
+                this.collapseVisualizationPanel();
+            }
+        });
+
+
+
+        // Clear data
+        clearBtn.addEventListener('click', async () => {
+            if (confirm('Are you sure you want to clear all communication data?')) {
+                await this.clearVisualizationData();
+            }
+        });
+
+
+
+        // Store methods for external access
+        this.expandVisualizationPanel = () => {
+            panel.classList.add('expanded');
+            isExpanded = true;
+            this.loadVisualizationData();
+        };
+
+        this.collapseVisualizationPanel = () => {
+            panel.classList.remove('expanded');
+            isExpanded = false;
+            
+            // Call the same functionality as the Clear Data button
+            this.clearVisualizationData();
+        };
+
+        this.loadVisualizationData = async () => {
+            try {
+                loading.style.display = 'flex';
+                container.style.display = 'none';
+
+                const response = await fetch('/api/communication-data');
+                const data = await response.json();
+                
+                console.log('Loaded communication data:', data);
+
+                if (data && data.length > 0) {
+                    this.communicationData = data;
+                    this.createAgentNodes();
+                    // Small delay to ensure nodes are created before starting animation
+                    setTimeout(() => {
+                        this.startSimpleVisualization();
+                    }, 100);
+                } else {
+                    graphContainer.innerHTML = '<p style="color: white; text-align: center; margin-top: 2rem;">No communication data available. Start a conversation to see agent interactions.</p>';
+                    this.communicationData = [];
+                    this.currentStep = 0;
+                }
+
+                loading.style.display = 'none';
+                container.style.display = 'flex';
+            } catch (error) {
+                console.error('Error loading visualization data:', error);
+                graphContainer.innerHTML = '<p>Error loading data. Please try again.</p>';
+                loading.style.display = 'none';
+                container.style.display = 'flex';
+            }
+        };
+
+        this.renderVisualization = (data) => {
+            // Use the proper visualization with nodes and connections
+            this.communicationData = data;
+            
+            // Only create nodes and start animation if there's actual communication data
+            if (data && data.length > 0) {
+                this.createAgentNodes();
+                this.startVisualization();
+            } else {
+                // Show empty state
+                graphContainer.innerHTML = '<p style="color: white; text-align: center; margin-top: 2rem;">No communication data available. Start a conversation to see agent interactions.</p>';
+            }
+        };
+
+        // Simple agent configuration
+        this.agents = {
+            'User': { x: 300, y: 20, status: 'idle' },
+            'Supervisor': { x: 500, y: 20, status: 'idle' },
+            'NBI Agent': { x: 200, y: 120, status: 'idle' },
+            'Plan Agent': { x: 600, y: 120, status: 'idle' },
+            'DT Agent': { x: 200, y: 220, status: 'idle' },
+            'Tunnel Operator': { x: 600, y: 220, status: 'idle' },
+            '__end__': { x: 400, y: 320, status: 'idle' }
+        };
+
+        this.isPlaying = false;
+        this.isPaused = false;
+        this.currentStep = 0;
+
+        this.createAgentNodes = () => {
+            // Clear existing nodes
+            graphContainer.innerHTML = '';
+            
+            Object.entries(this.agents).forEach(([name, config]) => {
+                const node = document.createElement('div');
+                node.className = 'agent-node idle';
+                node.id = `agent-${name.replace(/\s+/g, '-')}`;
+                node.style.left = `${config.x}px`;
+                node.style.top = `${config.y}px`;
+                node.textContent = name;
+                node.title = `${name} - Idle`;
+                
+                node.addEventListener('click', () => this.showAgentDetails(name));
+                
+                graphContainer.appendChild(node);
+            });
+
+            // Create communication log
+            const logContainer = document.createElement('div');
+            logContainer.className = 'communication-log';
+            logContainer.style.cssText = `
+                position: absolute;
+                bottom: 20px;
+                left: 20px;
+                right: 20px;
+                height: 200px;
+                background: rgba(0, 0, 0, 0.3);
+                border-radius: 8px;
+                padding: 15px;
+                overflow-y: auto;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            `;
+            
+            const logTitle = document.createElement('h4');
+            logTitle.textContent = '📋 Communication Log';
+            logTitle.style.cssText = 'color: white; margin: 0 0 10px 0; font-size: 1rem;';
+            logContainer.appendChild(logTitle);
+
+            const logEntries = document.createElement('div');
+            logEntries.id = 'logEntries';
+            logContainer.appendChild(logEntries);
+            graphContainer.appendChild(logContainer);
+        };
+
+        this.showAgentDetails = (agentName) => {
+            console.log(`Agent details for: ${agentName}`);
+        };
+
+        this.startSimpleVisualization = () => {
+            if (this.communicationData.length === 0) {
+                console.log('No communication data available.');
+                return;
+            }
+
+            // Prevent multiple starts
+            if (this.isPlaying) {
+                console.log('Visualization already running.');
+                return;
+            }
+
+            this.isPlaying = true;
+            this.isPaused = false;
+            this.currentStep = 0;
+            
+            // Clear any existing connections first
+            const existingConnections = graphContainer.querySelectorAll('.connection-line');
+            existingConnections.forEach(conn => conn.remove());
+            
+            // Start the simple animation
+            this.processNextStep();
+        };
+
+        this.processNextStep = async () => {
+            if (!this.isPlaying || this.isPaused) return;
+            
+            if (this.currentStep >= this.communicationData.length) {
+                this.stopVisualization();
+                return;
+            }
+
+            const step = this.communicationData[this.currentStep];
+            await this.processSimpleStep(step);
+            
+            this.currentStep++;
+            
+            // Continue to next step after delay
+            setTimeout(() => this.processNextStep(), 1500);
+        };
+
+        this.processSimpleStep = async (step) => {
+            const { caller, talkto, message } = step;
+            
+            // Add log entry
+            this.addLogEntry(caller, talkto, message);
+            
+            // Update caller status to active
+            this.updateAgentStatus(caller, 'active');
+            
+            // Wait for processing
+            await this.delay(1500);
+            
+            // Create connection from caller to callee
+            this.createConnection(caller, talkto);
+            
+            // Update callee status to processing
+            this.updateAgentStatus(talkto, 'processing');
+            
+            // Wait for response
+            await this.delay(1500);
+            
+            // Update caller status to waiting
+            this.updateAgentStatus(caller, 'waiting');
+            
+            // Wait for final response
+            await this.delay(1500);
+            
+            // Reset both agents to idle
+            this.updateAgentStatus(caller, 'idle');
+            this.updateAgentStatus(talkto, 'idle');
+        };
+
+        this.updateAgentStatus = (agentName, status) => {
+            const node = document.getElementById(`agent-${agentName.replace(/\s+/g, '-')}`);
+            if (node) {
+                node.className = `agent-node ${status}`;
+                node.title = `${agentName} - ${status.charAt(0).toUpperCase() + status.slice(1)}`;
+            }
+        };
+
+        this.createConnection = (fromAgent, toAgent) => {
+            const fromNode = document.getElementById(`agent-${fromAgent.replace(/\s+/g, '-')}`);
+            const toNode = document.getElementById(`agent-${toAgent.replace(/\s+/g, '-')}`);
+            
+            if (!fromNode || !toNode) return;
+            
+            const fromRect = fromNode.getBoundingClientRect();
+            const toRect = toNode.getBoundingClientRect();
+            const containerRect = graphContainer.getBoundingClientRect();
+            
+            // Calculate center positions
+            const fromCenterX = fromRect.left - containerRect.left + fromRect.width / 2;
+            const fromCenterY = fromRect.top - containerRect.top + fromRect.height / 2;
+            const toCenterX = toRect.left - containerRect.left + toRect.width / 2;
+            const toCenterY = toRect.top - containerRect.top + toRect.height / 2;
+            
+            // Calculate direction vector
+            const dx = toCenterX - fromCenterX;
+            const dy = toCenterY - fromCenterY;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            
+            if (length === 0) return; // Same position
+            
+            // Normalize direction vector
+            const dirX = dx / length;
+            const dirY = dy / length;
+            
+            // Calculate perpendicular vector for offset
+            const perpX = -dirY;
+            const perpY = dirX;
+            
+            // Count existing connections between these agents to create offset
+            const existingConnections = graphContainer.querySelectorAll('.connection-line');
+            let offsetCount = 0;
+            
+            existingConnections.forEach(conn => {
+                // Check for connections in both directions between these agents
+                if ((conn.dataset.from === fromAgent && conn.dataset.to === toAgent) ||
+                    (conn.dataset.from === toAgent && conn.dataset.to === fromAgent)) {
+                    offsetCount++;
+                }
+            });
+            
+            // Calculate offset with smaller spacing
+            const offset = offsetCount * 8; // 8px spacing between parallel lines
+            
+            // Node radius (all nodes are circles with 40px radius)
+            const nodeRadius = 40;
+            
+            // Calculate edge points (from border to border)
+            const fromEdgeX = fromCenterX + dirX * nodeRadius;
+            const fromEdgeY = fromCenterY + dirY * nodeRadius;
+            const toEdgeX = toCenterX - dirX * nodeRadius;
+            const toEdgeY = toCenterY - dirY * nodeRadius;
+            
+            // Apply perpendicular offset to edge points
+            // Alternate offset direction for better visual separation
+            const offsetDirection = offsetCount % 2 === 0 ? 1 : -1;
+            const finalOffset = offset * offsetDirection;
+            
+            const offsetFromX = fromEdgeX + perpX * finalOffset;
+            const offsetFromY = fromEdgeY + perpY * finalOffset;
+            const offsetToX = toEdgeX + perpX * finalOffset;
+            const offsetToY = toEdgeY + perpY * finalOffset;
+            
+            // Calculate the actual line length and angle
+            const lineDx = offsetToX - offsetFromX;
+            const lineDy = offsetToY - offsetFromY;
+            const lineLength = Math.sqrt(lineDx * lineDx + lineDy * lineDy);
+            const angle = Math.atan2(lineDy, lineDx) * 180 / Math.PI;
+            
+            const line = document.createElement('div');
+            line.className = 'connection-line animated';
+            line.dataset.from = fromAgent;
+            line.dataset.to = toAgent;
+            line.style.left = `${offsetFromX}px`;
+            line.style.top = `${offsetFromY}px`;
+            line.style.width = `${lineLength}px`;
+            line.style.transform = `rotate(${angle}deg)`;
+            
+            graphContainer.appendChild(line);
+            
+            // After animation, transition to static line (but keep it visible)
+            setTimeout(() => {
+                line.classList.remove('animated');
+                line.classList.add('static');
+            }, 2000);
+        };
+
+        this.addLogEntry = (fromAgent, toAgent, message, logContainer = null, skipDuplicateCheck = false) => {
+            const logEntries = logContainer || document.getElementById('logEntries');
+            if (!logEntries) return;
+            
+            // Check if this exact log entry already exists (unless skipDuplicateCheck is true)
+            if (!skipDuplicateCheck) {
+                const existingEntries = logEntries.querySelectorAll('.log-entry');
+                for (let entry of existingEntries) {
+                    const agentsText = entry.querySelector('div:last-child').textContent;
+                    const messageText = entry.querySelector('div:last-child').textContent;
+                    if (agentsText.includes(`${fromAgent} → ${toAgent}`) && messageText.includes(message.substring(0, 30))) {
+                        return; // Don't add duplicate log entries
+                    }
+                }
+            }
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.style.cssText = `
+                margin-bottom: 8px;
+                padding: 8px;
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 4px;
+                border-left: 3px solid #10b981;
+            `;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            const truncatedMessage = message.length > 100 ? message.substring(0, 100) + '...' : message;
+            
+            logEntry.innerHTML = `
+                <div style="color: #6b7280; font-size: 0.8rem; margin-bottom: 4px;">${timestamp}</div>
+                <div style="color: white; font-size: 0.9rem;">
+                    <strong style="color: #10b981;">${fromAgent}</strong> 
+                    <span style="color: #f59e0b;">→</span> 
+                    <strong style="color: #3b82f6;">${toAgent}</strong>: 
+                    <span style="color: #d1d5db;">${truncatedMessage}</span>
+                </div>
+            `;
+            
+            logEntries.appendChild(logEntry);
+            logEntries.scrollTop = logEntries.scrollHeight;
+        };
+
+
+
+
+
+        this.restoreVisualizationState = () => {
+            console.log('Restoring visualization state with', this.visualizationState.completedSteps.length, 'completed steps');
+            
+            // Clear existing connections first
+            const existingConnections = graphContainer.querySelectorAll('.connection-line');
+            existingConnections.forEach(conn => conn.remove());
+            
+            // Restore all completed connections
+            this.visualizationState.completedSteps.forEach(step => {
+                this.createStaticConnection(step.caller, step.talkto);
+                this.updateAgentStatus(step.caller, 'idle');
+                this.updateAgentStatus(step.talkto, 'idle');
+            });
+            
+            // Restore log entries
+            this.visualizationState.logEntries.forEach(entry => {
+                this.addLogEntry(entry.caller, entry.talkto, entry.message, null, true); // true = skip duplicate check
+            });
+        };
+
+        this.showCompletedCommunications = () => {
+            // Clear existing connections first
+            const existingConnections = graphContainer.querySelectorAll('.connection-line');
+            existingConnections.forEach(conn => conn.remove());
+            
+            // Clear existing log entries to prevent duplicates
+            const logEntries = document.getElementById('logEntries');
+            if (logEntries) {
+                logEntries.innerHTML = '';
+            }
+            
+            // Show all completed communications as static connections
+            for (let i = 0; i < this.currentStep; i++) {
+                const step = this.communicationData[i];
+                const { caller, talkto, message } = step;
+                
+                // Create static connection (no animation)
+                this.createStaticConnection(caller, talkto);
+                
+                // Add log entry for completed communication
+                this.addLogEntry(caller, talkto, message, null, true);
+                
+                // Update agent statuses based on the communication
+                this.updateAgentStatus(caller, 'idle');
+                this.updateAgentStatus(talkto, 'idle');
+            }
+        };
+
+        this.createStaticConnection = (fromAgent, toAgent) => {
+            const fromNode = document.getElementById(`agent-${fromAgent.replace(/\s+/g, '-')}`);
+            const toNode = document.getElementById(`agent-${toAgent.replace(/\s+/g, '-')}`);
+            
+            if (!fromNode || !toNode) return;
+            
+            // Check if connection already exists
+            const existingConnection = graphContainer.querySelector(`[data-from="${fromAgent}"][data-to="${toAgent}"]`);
+            if (existingConnection) return; // Don't create duplicate connections
+            
+            const fromRect = fromNode.getBoundingClientRect();
+            const toRect = toNode.getBoundingClientRect();
+            const containerRect = graphContainer.getBoundingClientRect();
+            
+            // Calculate center positions
+            const fromCenterX = fromRect.left - containerRect.left + fromRect.width / 2;
+            const fromCenterY = fromRect.top - containerRect.top + fromRect.height / 2;
+            const toCenterX = toRect.left - containerRect.left + toRect.width / 2;
+            const toCenterY = toRect.top - containerRect.top + toRect.height / 2;
+            
+            // Calculate direction vector
+            const dx = toCenterX - fromCenterX;
+            const dy = toCenterY - fromCenterY;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            
+            if (length === 0) return; // Same position
+            
+            // Normalize direction vector
+            const dirX = dx / length;
+            const dirY = dy / length;
+            
+            // Calculate perpendicular vector for offset
+            const perpX = -dirY;
+            const perpY = dirX;
+            
+            // Count existing connections between these agents to create offset
+            const existingConnections = graphContainer.querySelectorAll('.connection-line');
+            let offsetCount = 0;
+            
+            existingConnections.forEach(conn => {
+                if ((conn.dataset.from === fromAgent && conn.dataset.to === toAgent) ||
+                    (conn.dataset.from === toAgent && conn.dataset.to === fromAgent)) {
+                    offsetCount++;
+                }
+            });
+            
+            // Calculate offset
+            const offset = offsetCount * 8;
+            const nodeRadius = 40;
+            
+            // Calculate edge points
+            const fromEdgeX = fromCenterX + dirX * nodeRadius;
+            const fromEdgeY = fromCenterY + dirY * nodeRadius;
+            const toEdgeX = toCenterX - dirX * nodeRadius;
+            const toEdgeY = toCenterY - dirY * nodeRadius;
+            
+            // Apply perpendicular offset
+            const offsetDirection = offsetCount % 2 === 0 ? 1 : -1;
+            const finalOffset = offset * offsetDirection;
+            
+            const offsetFromX = fromEdgeX + perpX * finalOffset;
+            const offsetFromY = fromEdgeY + perpY * finalOffset;
+            const offsetToX = toEdgeX + perpX * finalOffset;
+            const offsetToY = toEdgeY + perpY * finalOffset;
+            
+            // Calculate line length and angle
+            const lineDx = offsetToX - offsetFromX;
+            const lineDy = offsetToY - offsetFromY;
+            const lineLength = Math.sqrt(lineDx * lineDx + lineDy * lineDy);
+            const angle = Math.atan2(lineDy, lineDx) * 180 / Math.PI;
+            
+            const line = document.createElement('div');
+            line.className = 'connection-line static'; // Static, no animation
+            line.dataset.from = fromAgent;
+            line.dataset.to = toAgent;
+            line.style.left = `${offsetFromX}px`;
+            line.style.top = `${offsetFromY}px`;
+            line.style.width = `${lineLength}px`;
+            line.style.transform = `rotate(${angle}deg)`;
+            
+            graphContainer.appendChild(line);
+        };
+
+        this.updateAgentStatus = (agentName, status) => {
+            const node = document.getElementById(`agent-${agentName.replace(/\s+/g, '-')}`);
+            if (node) {
+                node.className = `agent-node ${status}`;
+                node.title = `${agentName} - ${status.charAt(0).toUpperCase() + status.slice(1)}`;
+            }
+        };
+
+        this.stopVisualization = () => {
+            this.isPlaying = false;
+            this.isPaused = false;
+        };
+
+        this.delay = (ms) => {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        };
+
+        this.createConnection = (fromAgent, toAgent) => {
+            const fromNode = document.getElementById(`agent-${fromAgent.replace(/\s+/g, '-')}`);
+            const toNode = document.getElementById(`agent-${toAgent.replace(/\s+/g, '-')}`);
+            
+            if (!fromNode || !toNode) return;
+            
+            // Check if connection already exists
+            const existingConnection = graphContainer.querySelector(`[data-from="${fromAgent}"][data-to="${toAgent}"]`);
+            if (existingConnection) return; // Don't create duplicate connections
+            
+            const fromRect = fromNode.getBoundingClientRect();
+            const toRect = toNode.getBoundingClientRect();
+            const containerRect = graphContainer.getBoundingClientRect();
+            
+            // Calculate center positions
+            const fromCenterX = fromRect.left - containerRect.left + fromRect.width / 2;
+            const fromCenterY = fromRect.top - containerRect.top + fromRect.height / 2;
+            const toCenterX = toRect.left - containerRect.left + toRect.width / 2;
+            const toCenterY = toRect.top - containerRect.top + toRect.height / 2;
+            
+            // Calculate direction vector
+            const dx = toCenterX - fromCenterX;
+            const dy = toCenterY - fromCenterY;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            
+            if (length === 0) return; // Same position
+            
+            // Normalize direction vector
+            const dirX = dx / length;
+            const dirY = dy / length;
+            
+            // Calculate perpendicular vector for offset
+            const perpX = -dirY;
+            const perpY = dirX;
+            
+            // Count existing connections between these agents to create offset
+            const existingConnections = graphContainer.querySelectorAll('.connection-line');
+            let offsetCount = 0;
+            
+            existingConnections.forEach(conn => {
+                if ((conn.dataset.from === fromAgent && conn.dataset.to === toAgent) ||
+                    (conn.dataset.from === toAgent && conn.dataset.to === fromAgent)) {
+                    offsetCount++;
+                }
+            });
+            
+            // Calculate offset
+            const offset = offsetCount * 8;
+            const nodeRadius = 40;
+            
+            // Calculate edge points
+            const fromEdgeX = fromCenterX + dirX * nodeRadius;
+            const fromEdgeY = fromCenterY + dirY * nodeRadius;
+            const toEdgeX = toCenterX - dirX * nodeRadius;
+            const toEdgeY = toCenterY - dirY * nodeRadius;
+            
+            // Apply perpendicular offset
+            const offsetDirection = offsetCount % 2 === 0 ? 1 : -1;
+            const finalOffset = offset * offsetDirection;
+            
+            const offsetFromX = fromEdgeX + perpX * finalOffset;
+            const offsetFromY = fromEdgeY + perpY * finalOffset;
+            const offsetToX = toEdgeX + perpX * finalOffset;
+            const offsetToY = toEdgeY + perpY * finalOffset;
+            
+            // Calculate line length and angle
+            const lineDx = offsetToX - offsetFromX;
+            const lineDy = offsetToY - offsetFromY;
+            const lineLength = Math.sqrt(lineDx * lineDx + lineDy * lineDy);
+            const angle = Math.atan2(lineDy, lineDx) * 180 / Math.PI;
+            
+            const line = document.createElement('div');
+            line.className = 'connection-line animated';
+            line.dataset.from = fromAgent;
+            line.dataset.to = toAgent;
+            line.style.left = `${offsetFromX}px`;
+            line.style.top = `${offsetFromY}px`;
+            line.style.width = `${lineLength}px`;
+            line.style.transform = `rotate(${angle}deg)`;
+            
+            graphContainer.appendChild(line);
+            
+            // After animation, transition to static line
+            setTimeout(() => {
+                line.classList.remove('animated');
+                line.classList.add('static');
+            }, 1500);
+        };
+
+        this.delay = (ms) => {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        };
+
+        // Method to clear visualization data (same as Clear Data button)
+        this.clearVisualizationData = async () => {
+            try {
+                // Clear backend data
+                const response = await fetch('/api/clear-communication-data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    // Clear the graph container
+                    const graphContainer = document.getElementById('graph-container');
+                    if (graphContainer) {
+                        graphContainer.innerHTML = '<p style="color: white; text-align: center; margin-top: 2rem;">✅ All communication data cleared successfully.</p>';
+                    }
+                    // Reset local variables
+                    this.communicationData = [];
+                    this.currentStep = 0;
+                    // Stop any ongoing animation
+                    this.stopVisualization();
+                } else {
+                    console.error('Failed to clear backend data');
+                }
+            } catch (error) {
+                console.error('Error clearing data:', error);
+            }
+        };
+
+
     }
 }
 

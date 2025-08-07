@@ -64,10 +64,10 @@
                         <i class="fas fa-tachometer-alt"></i>
                         <span>Performance Optimization</span>
                     </button>
-                    <a href="/visualization" target="visualization" class="quick-action-btn visualization-btn">
+                    <button class="quick-action-btn visualization-btn" id="visualization-toggle-btn">
                         <i class="fas fa-project-diagram"></i>
                         <span>Agent Communication Flow</span>
-                    </a>
+                    </button>
                 </div>
             </div>
 
@@ -204,6 +204,36 @@
                 </a>
             </div>
         </aside>
+
+        <!-- Expandable Visualization Panel -->
+        <div class="visualization-panel" id="visualization-panel">
+            <div class="visualization-header">
+                <h2 class="visualization-title">
+                    <i class="fas fa-project-diagram"></i>
+                    AI Agent Communication Flow
+                </h2>
+                <button class="visualization-close-btn" id="visualization-close-btn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="visualization-content" id="visualization-content">
+                <div class="visualization-loading" id="visualization-loading">
+                    <div class="loading-spinner"></div>
+                    <p>Loading communication data...</p>
+                </div>
+                <div class="visualization-container" id="visualization-container" style="display: none;">
+                    <div class="graph-container" id="graph-container">
+                        <!-- Visualization graph will be rendered here -->
+                    </div>
+                    <div class="visualization-controls">
+                        <button class="btn btn-danger" id="clear-btn">
+                            <i class="fas fa-trash"></i>
+                            Clear Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <!-- Main Content Area -->
         <main class="main-content">

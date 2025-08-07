@@ -266,10 +266,15 @@ class CommunicationParser:
 class MockSupervisor:
     def __init__(self):
         self.log_parser = LogParser()
+        self.communication_parser = None  # Will be initialized in process_user_input
     
     def process_user_input(self, user_input, show_thoughts=False):
         """Process user input and yield responses"""
         try:
+            # Initialize communication parser and populate communication data
+            if not self.communication_parser:
+                self.communication_parser = CommunicationParser(load_file=True)
+            
             # Generate response
             response = self._generate_response(user_input)
             
@@ -288,7 +293,7 @@ class MockSupervisor:
                             'communication_data': None  # MockSupervisor doesn't have real communication data
                         }
                     }
-                    socketio.sleep(1)  # Delay between thoughts
+                    socketio.sleep(1.5)  # Delay between thoughts (sync with frontend)
             
             # Yield final response
             yield {
@@ -350,6 +355,18 @@ class MockSupervisor:
         
         else:
             return f"Thank you for your network planning query: '{user_input}'. As Huawei Network Planning AI Assistant, for Etisalat (e&), I can help you with comprehensive network analysis, optimization recommendations, and technical solutions. In the real implementation, this will come from your actual network planning supervisor with detailed analysis and specific recommendations for your network infrastructure."
+    
+    def get_communication_data(self):
+        """Get communication data for visualization"""
+        try:
+            if self.communication_parser:
+                return self.communication_parser.get_communication_flow()
+            else:
+                # Return empty data if no communication parser has been initialized
+                return []
+        except Exception as e:
+            print(f"Error getting communication data from MockSupervisor: {e}")
+            return []
 
 # Real supervisor integration class for LangGraph
 class RealSupervisor:
@@ -419,7 +436,7 @@ class RealSupervisor:
                     }
                 
                 # Small delay for smooth streaming
-                socketio.sleep(0.5)
+                socketio.sleep(1.5)
             
             # Final response (not a thought)
             yield {
@@ -690,12 +707,10 @@ def visualization():
 def get_communication_data():
     """API endpoint to get communication data for visualization"""
     try:
+        # Simply read the communication data from the supervisor
         if isinstance(supervisor, MockSupervisor):
-            # For MockSupervisor, use CommunicationParser to read static log file
-            communication_parser = CommunicationParser(load_file=True)
-            flow_data = communication_parser.get_communication_flow()
+            flow_data = supervisor.get_communication_data()
         elif isinstance(supervisor, RealSupervisor):
-            # For RealSupervisor, use its own communication tracking
             flow_data = supervisor.get_communication_data()
         else:
             # Fallback for unknown supervisor types
@@ -706,6 +721,25 @@ def get_communication_data():
     except Exception as e:
         print(f"Error getting communication data: {e}")
         return jsonify([])
+
+@app.route('/api/clear-communication-data', methods=['POST'])
+@login_required
+def clear_communication_data():
+    """API endpoint to clear communication data"""
+    try:
+        if isinstance(supervisor, MockSupervisor):
+            # Reset the communication parser to clear data
+            supervisor.communication_parser = None
+        elif isinstance(supervisor, RealSupervisor):
+            # Clear communication data for RealSupervisor
+            supervisor.communication_parser = None
+        else:
+            print(f"Unknown supervisor type: {type(supervisor)}")
+        
+        return jsonify({'success': True, 'message': 'Communication data cleared'})
+    except Exception as e:
+        print(f"Error clearing communication data: {e}")
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/trigger-visualization')
 @login_required
@@ -824,6 +858,7 @@ def handle_message(data):
                 'total_thoughts': response.get('total_thoughts')
             })
             socketio.sleep(0.1)  # Small delay for smooth streaming
+        
     except Exception as e:
         print(f"Error processing message: {str(e)}")
         emit('receive_message', {

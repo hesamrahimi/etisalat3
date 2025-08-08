@@ -5,6 +5,7 @@ import json
 import ast
 from datetime import datetime
 import random
+import threading
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'
@@ -392,6 +393,8 @@ class RealSupervisor:
         # Don't initialize CommunicationParser here - it will be created when needed
         # for real-time communication tracking
         self.communication_parser = None
+        # Add thread lock for thread safety
+        self._lock = threading.Lock()
         # You'll need to import and initialize your actual LangGraph supervisor here
         # self.your_langgraph_supervisor = YourLangGraphSupervisor()
     
@@ -409,11 +412,12 @@ class RealSupervisor:
         """
         try:
             # Initialize communication parser for this conversation (empty, no file reading)
-            if not self.communication_parser:
-                self.communication_parser = CommunicationParser(load_file=False)
-            
-            # Reset communication data for new conversation
-            self.communication_parser.reset_communications()
+            with self._lock:
+                if not self.communication_parser:
+                    self.communication_parser = CommunicationParser(load_file=False)
+                
+                # Reset communication data for new conversation
+                self.communication_parser.reset_communications()
             
             # TODO: Replace this with your actual LangGraph supervisor initialization
             # workflow = self.your_langgraph_supervisor.graph.compile()
@@ -429,18 +433,22 @@ class RealSupervisor:
             # Simulate LangGraph streaming with thoughts
             for i, response in enumerate(self._simulate_langgraph_streaming(user_input)):
                 step_count += 1
+                print(f"RealSupervisor: Processing step {step_count}")
                 
                 # Extract communication data from LangGraph response
                 communication_data = self._extract_communication_from_langgraph(response)
                 
                 if communication_data:
-                    # Add to communication parser for visualization
-                    self.communication_parser.add_communication_entry(communication_data)
+                    # Add to communication parser for visualization (thread-safe)
+                    with self._lock:
+                        self.communication_parser.add_communication_entry(communication_data)
+                    print(f"RealSupervisor: Added communication data for step {step_count}")
                 
                 # Only yield thoughts if show_thoughts is True (like MockSupervisor)
                 if show_thoughts:
                     # Extract actual thought content from LangGraph response (same as LogParser)
                     thought_content = self._extract_thought_content_from_langgraph(response)
+                    print(f"RealSupervisor: Yielding thought {step_count}: {thought_content[:50]}...")
                     
                     # Yield thought for frontend (not response)
                     yield {
@@ -453,7 +461,7 @@ class RealSupervisor:
                         }
                     }
                 
-                # Small delay for smooth streaming
+                # Small delay for smooth streaming (sync with MockSupervisor)
                 socketio.sleep(1.5)
             
             # Final response (not a thought)
@@ -482,18 +490,20 @@ class RealSupervisor:
         Get communication data for visualization
         Returns empty list if no communication parser is initialized
         """
-        if self.communication_parser:
-            return self.communication_parser.get_communication_flow()
-        return []
+        with self._lock:
+            if self.communication_parser:
+                return self.communication_parser.get_communication_flow()
+            return []
     
     def get_latest_communications(self):
         """
         Get latest communications for real-time updates
         Returns empty list if no communication parser is initialized
         """
-        if self.communication_parser:
-            return self.communication_parser.get_latest_communications()
-        return []
+        with self._lock:
+            if self.communication_parser:
+                return self.communication_parser.get_latest_communications()
+            return []
     
     def _extract_communication_from_langgraph(self, langgraph_response):
         """Extract communication data from LangGraph response using same regex as MockSupervisor"""
@@ -637,55 +647,114 @@ class RealSupervisor:
             Simulated LangGraph responses
         """
         # This is a simulation - replace with your actual LangGraph workflow
+        # Generate 14 steps to match MockSupervisor behavior
         simulated_steps = [
             {
                 'agent_name': 'Supervisor',
                 'caller': 'Supervisor',
                 'talkto': 'NBI Agent',
                 'message': f'Processing user request: {user_input}',
-                'content': 'Analyzing network requirements...'
+                'content': 'To complete the task, I will follow the steps outlined:\n\n1. Extract and translate node names and TP locations to UUIDs\n2. Pass UUIDs to Plan Agent for OCh planning\n3. Request NBI Agent to plan OCh on NCE\n4. Request DT Agent to plan OCh on OPE\n5. Request Tunnel Operator to create OCh\n6. Create OCh on OPE using DT Agent\n7. Create OCh on NCE using NBI Agent'
             },
             {
                 'agent_name': 'NBI Agent',
                 'caller': 'NBI Agent',
                 'talkto': 'Supervisor',
-                'message': 'Retrieved node information',
-                'content': 'Node data collected successfully'
+                'message': 'Node UUIDs and TP UUIDs extracted successfully',
+                'content': 'I have successfully extracted the node UUIDs and TP UUIDs from the network configuration. The data is now ready for the planning phase.'
             },
             {
                 'agent_name': 'Supervisor',
                 'caller': 'Supervisor',
                 'talkto': 'Plan Agent',
-                'message': 'Requesting network planning',
-                'content': 'Planning network configuration...'
+                'message': 'Pass UUIDs to Plan Agent for OCh planning',
+                'content': 'The UUIDs have been extracted and are now being passed to the Plan Agent for OCh planning. This will involve analyzing the network topology and determining optimal paths.'
+            },
+            {
+                'agent_name': 'Plan Agent',
+                'caller': 'Plan Agent',
+                'talkto': 'NBI Agent',
+                'message': 'Request NBI Agent to plan OCh on NCE',
+                'content': 'I am requesting the NBI Agent to plan the OCh on NCE. This involves analyzing the network configuration and determining the optimal OCh path.'
+            },
+            {
+                'agent_name': 'NBI Agent',
+                'caller': 'NBI Agent',
+                'talkto': 'Plan Agent',
+                'message': 'NCE OCh planning completed',
+                'content': 'The NCE OCh planning has been completed successfully. The optimal path has been determined and is ready for implementation.'
             },
             {
                 'agent_name': 'Plan Agent',
                 'caller': 'Plan Agent',
                 'talkto': 'DT Agent',
-                'message': 'Requesting tunnel configuration',
-                'content': 'Configuring data tunnels...'
+                'message': 'Request DT Agent to plan OCh on OPE',
+                'content': 'Now requesting the DT Agent to plan the OCh on OPE. This will ensure proper tunnel configuration across the network.'
+            },
+            {
+                'agent_name': 'DT Agent',
+                'caller': 'DT Agent',
+                'talkto': 'Plan Agent',
+                'message': 'OPE OCh planning completed',
+                'content': 'The OPE OCh planning has been completed successfully. The tunnel configuration is optimized and ready for deployment.'
+            },
+            {
+                'agent_name': 'Plan Agent',
+                'caller': 'Plan Agent',
+                'talkto': 'Tunnel Operator',
+                'message': 'Request Tunnel Operator to create OCh',
+                'content': 'Requesting the Tunnel Operator to create the OCh. This will involve the actual implementation of the planned tunnel configuration.'
+            },
+            {
+                'agent_name': 'Tunnel Operator',
+                'caller': 'Tunnel Operator',
+                'talkto': 'DT Agent',
+                'message': 'Create OCh on OPE using DT Agent',
+                'content': 'I am creating the OCh on OPE using the DT Agent. This involves implementing the tunnel configuration on the OPE platform.'
             },
             {
                 'agent_name': 'DT Agent',
                 'caller': 'DT Agent',
                 'talkto': 'Tunnel Operator',
-                'message': 'Setting up tunnel operations',
-                'content': 'Tunnel setup in progress...'
+                'message': 'OPE OCh created successfully',
+                'content': 'The OCh has been successfully created on OPE. The tunnel is now active and operational.'
+            },
+            {
+                'agent_name': 'Tunnel Operator',
+                'caller': 'Tunnel Operator',
+                'talkto': 'NBI Agent',
+                'message': 'Create OCh on NCE using NBI Agent',
+                'content': 'Now creating the OCh on NCE using the NBI Agent. This will complete the tunnel configuration across both platforms.'
+            },
+            {
+                'agent_name': 'NBI Agent',
+                'caller': 'NBI Agent',
+                'talkto': 'Tunnel Operator',
+                'message': 'NCE OCh created successfully',
+                'content': 'The OCh has been successfully created on NCE. The tunnel is now fully operational across both platforms.'
             },
             {
                 'agent_name': 'Tunnel Operator',
                 'caller': 'Tunnel Operator',
                 'talkto': '__end__',
-                'message': 'Tunnel configuration complete',
-                'content': 'Network planning completed successfully!'
+                'message': 'Task completed successfully',
+                'content': 'The network planning task has been completed successfully. All OCh tunnels have been created and are operational.'
+            },
+            {
+                'agent_name': 'Supervisor',
+                'caller': 'Supervisor',
+                'talkto': '__end__',
+                'message': 'Final confirmation of completion',
+                'content': 'All network planning operations have been completed successfully. The system is ready for production use.'
             }
         ]
         
-        for step in simulated_steps:
+        print(f"RealSupervisor: Starting simulation with {len(simulated_steps)} steps")
+        for i, step in enumerate(simulated_steps):
+            print(f"RealSupervisor: Yielding simulation step {i+1}/{len(simulated_steps)}")
             yield step
-            # Simulate processing time
-            socketio.sleep(1)
+            # Simulate processing time (sync with MockSupervisor)
+            socketio.sleep(1.5)
 
     def _generate_final_response(self, user_input):
         """
@@ -696,6 +765,9 @@ class RealSupervisor:
 
 # Global supervisor instance - change this to RealSupervisor() when integrating with your LangGraph
 supervisor = MockSupervisor()  # TODO: Change to RealSupervisor() for production
+
+# Global lock to prevent multiple SocketIO streams from interfering
+socketio_lock = threading.Lock()
 
 @app.route('/')
 def index():
@@ -743,6 +815,9 @@ def get_communication_data():
     """API endpoint to get communication data for visualization"""
     try:
         # Simply read the communication data from the supervisor
+        # Add a small delay to avoid race conditions with SocketIO streaming
+        time.sleep(0.1)
+        
         if isinstance(supervisor, MockSupervisor):
             flow_data = supervisor.get_communication_data()
         elif isinstance(supervisor, RealSupervisor):
@@ -809,6 +884,9 @@ def trigger_visualization():
 def get_latest_communications():
     """API endpoint to get latest communications for real-time updates"""
     try:
+        # Add a small delay to avoid race conditions with SocketIO streaming
+        time.sleep(0.1)
+        
         if isinstance(supervisor, MockSupervisor):
             # For MockSupervisor, use CommunicationParser to read static log file
             communication_parser = CommunicationParser(load_file=True)
@@ -878,21 +956,29 @@ def handle_message(data):
     
     # Process with supervisor (mock for now)
     try:
-        for response in supervisor.process_user_input(user_input, show_thoughts):
-            # Extract metadata if present
-            metadata = response.get('metadata', {})
+        # Use global lock to prevent race conditions with visualization API calls
+        with socketio_lock:
+            response_count = 0
+            for response in supervisor.process_user_input(user_input, show_thoughts):
+                response_count += 1
+                # Extract metadata if present
+                metadata = response.get('metadata', {})
+                
+                print(f"Emitting response {response_count}: {response['type']} - {response['content'][:50]}...")
+                
+                emit('receive_message', {
+                    'type': response['type'],
+                    'content': response['content'],
+                    'timestamp': response['timestamp'],
+                    'sender': 'ai',
+                    'metadata': metadata,
+                    # Include additional fields for frontend compatibility
+                    'thought_number': response.get('thought_number'),
+                    'total_thoughts': response.get('total_thoughts')
+                })
+                socketio.sleep(0.1)  # Small delay for smooth streaming
             
-            emit('receive_message', {
-                'type': response['type'],
-                'content': response['content'],
-                'timestamp': response['timestamp'],
-                'sender': 'ai',
-                'metadata': metadata,
-                # Include additional fields for frontend compatibility
-                'thought_number': response.get('thought_number'),
-                'total_thoughts': response.get('total_thoughts')
-            })
-            socketio.sleep(0.1)  # Small delay for smooth streaming
+            print(f"Total responses emitted: {response_count}")
         
     except Exception as e:
         print(f"Error processing message: {str(e)}")

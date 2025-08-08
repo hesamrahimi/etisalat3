@@ -27,14 +27,14 @@ def login_required(f):
 
 # Log parser class to handle the logs.txt format
 class LogParser:
-    def __init__(self, log_file_path='logs.txt'):
+    def __init__(self, log_file_path='logs_new.txt'):
         self.log_file_path = log_file_path
         self.current_log_index = 0
         self.parsed_thoughts = []
         self._parse_logs()
     
     def _parse_logs(self):
-        """Parse the logs.txt file and extract thought messages"""
+        """Parse the logs_new.txt file and extract thought messages"""
         try:
             with open(self.log_file_path, 'r', encoding='utf-8') as file:
                 content = file.read()
@@ -62,23 +62,41 @@ class LogParser:
         """Extract thought content from log entry using regex"""
         import re
         
-        # Look for HumanMessage patterns
-        # Pattern: HumanMessage(content='...', ...)
-        human_message_pattern = r"HumanMessage\(content='([^']*)'"
-        matches = re.findall(human_message_pattern, entry)
+        # Check if this entry represents a tuple where the first item is an empty tuple
+        if not re.match(r'^\(\(\s*\),\s*\{', entry, re.DOTALL):
+            return None
         
-        if matches:
-            # Return the first HumanMessage content found
-            return matches[0]
-        
-        # If no HumanMessage found, look for any content in quotes that might be a thought
-        # This is a fallback for other message types
-        content_pattern = r"content='([^']*)'"
-        matches = re.findall(content_pattern, entry)
-        
-        if matches:
-            # Return the first content found
-            return matches[0]
+        # Look for 'messages' field in the block
+        messages_match = re.search(r"'messages'\s*:\s*\[(.*?)\]", entry, re.DOTALL)
+        if messages_match:
+            messages_content = messages_match.group(1)
+            
+            # First try to find HumanMessage(content='...') or HumanMessage(content="...")
+            # Use a more robust pattern that can handle complex content
+            human_message_match = re.search(r'HumanMessage\(content=["\'](.*?)["\'](?:,|\))', messages_content, re.DOTALL)
+            if not human_message_match:
+                # Try alternative pattern without the comma/parenthesis requirement
+                human_message_match = re.search(r'HumanMessage\(content=["\'](.*?)["\']', messages_content, re.DOTALL)
+            
+            if human_message_match:
+                content = human_message_match.group(1)
+                if content:
+                    return content
+            else:
+                # If no HumanMessage, try a more aggressive approach
+                # Look for HumanMessage(content='...') with any ending
+                human_message_match = re.search(r'HumanMessage\(content=["\']([^"\']*)', messages_content, re.DOTALL)
+                if human_message_match:
+                    content = human_message_match.group(1)
+                    if content:
+                        return content
+                else:
+                    # If no HumanMessage, look for quoted strings (both single and double quotes)
+                    quoted_match = re.search(r'["\']([^"\']+)["\']', messages_content)
+                    if quoted_match:
+                        content = quoted_match.group(1)
+                        if content:
+                            return content
         
         return None
     
@@ -569,26 +587,43 @@ class RealSupervisor:
         # Convert LangGraph response to string for parsing
         response_str = str(langgraph_response)
         
-        # Look for HumanMessage patterns (same as LogParser)
-        # Pattern: HumanMessage(content='...', ...)
-        human_message_pattern = r"HumanMessage\(content='([^']*)'"
-        matches = re.findall(human_message_pattern, response_str)
+        # Check if this response represents a tuple where the first item is an empty tuple
+        if not re.match(r'^\(\(\s*\),\s*\{', response_str, re.DOTALL):
+            return None
         
-        if matches:
-            # Return the first HumanMessage content found
-            return matches[0]
+        # Look for 'messages' field in the block
+        messages_match = re.search(r"'messages'\s*:\s*\[(.*?)\]", response_str, re.DOTALL)
+        if messages_match:
+            messages_content = messages_match.group(1)
+            
+            # First try to find HumanMessage(content='...') or HumanMessage(content="...")
+            # Use a more robust pattern that can handle complex content
+            human_message_match = re.search(r'HumanMessage\(content=["\'](.*?)["\'](?:,|\))', messages_content, re.DOTALL)
+            if not human_message_match:
+                # Try alternative pattern without the comma/parenthesis requirement
+                human_message_match = re.search(r'HumanMessage\(content=["\'](.*?)["\']', messages_content, re.DOTALL)
+            
+            if human_message_match:
+                content = human_message_match.group(1)
+                if content:
+                    return content
+            else:
+                # If no HumanMessage, try a more aggressive approach
+                # Look for HumanMessage(content='...') with any ending
+                human_message_match = re.search(r'HumanMessage\(content=["\']([^"\']*)', messages_content, re.DOTALL)
+                if human_message_match:
+                    content = human_message_match.group(1)
+                    if content:
+                        return content
+                else:
+                    # If no HumanMessage, look for quoted strings (both single and double quotes)
+                    quoted_match = re.search(r'["\']([^"\']+)["\']', messages_content)
+                    if quoted_match:
+                        content = quoted_match.group(1)
+                        if content:
+                            return content
         
-        # If no HumanMessage found, look for any content in quotes that might be a thought
-        # This is a fallback for other message types (same as LogParser)
-        content_pattern = r"content='([^']*)'"
-        matches = re.findall(content_pattern, response_str)
-        
-        if matches:
-            # Return the first content found
-            return matches[0]
-        
-        # If no content found, return a fallback message
-        return f"Processing step: {response_str[:100]}..." if len(response_str) > 100 else response_str
+        return None
     
     def _simulate_langgraph_streaming(self, user_input):
         """

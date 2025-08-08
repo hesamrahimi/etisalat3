@@ -94,7 +94,9 @@ etisalat3-main/
 │   └── js/
 │       └── chat.js       # Frontend JavaScript logic
 └── templates/
-    └── index.html        # Main HTML template
+    ├── login.html         # Login page template
+    ├── dashboard.html     # Main dashboard/chat interface
+    └── visualization.html # AI Agent Communication Flow visualization
 ```
 
 ## 🎨 Customization

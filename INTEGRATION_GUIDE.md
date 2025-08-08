@@ -12,7 +12,9 @@ This Flask-based web application provides a modern, professional chatbot interfa
 - **Mock Supervisor**: Currently uses `MockSupervisor` class for demonstration
 
 ### Frontend
-- **HTML**: `templates/index.html` - Modern, responsive layout
+- **HTML**: `templates/dashboard.html` - Main dashboard/chat interface
+- **HTML**: `templates/login.html` - Login page
+- **HTML**: `templates/visualization.html` - AI Agent Communication Flow visualization
 - **CSS**: `static/css/style.css` - Professional styling with animations
 - **JavaScript**: `static/js/chat.js` - Real-time message handling
 

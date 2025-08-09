@@ -57,6 +57,7 @@ class ModernChatInterface {
         this.initializeUI();
         this.initializeSidebar();
         this.initializeSettings();
+        this.initializeTabNavigation();
         this.initializeVisualizationPanel();
         this.startAutoSave();
     }
@@ -995,70 +996,82 @@ class ModernChatInterface {
         this.settingsToggle.classList.toggle('expanded');
     }
 
-    // Initialize visualization panel functionality
+    // Initialize tab navigation functionality
+    initializeTabNavigation() {
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabContents = document.querySelectorAll('.tab-content');
+        
+        // Track active tab
+        this.activeTab = 'dashboard';
+        
+        // Add click event listeners to tab buttons
+        tabButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                const targetTab = button.getAttribute('data-tab');
+                this.switchToTab(targetTab);
+            });
+        });
+        
+        // Initialize visualization when switching to visualization tab
+        this.initializeVisualizationOnTabSwitch();
+    }
+    
+    switchToTab(tabName) {
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabContents = document.querySelectorAll('.tab-content');
+        
+        // Update active tab
+        this.activeTab = tabName;
+        
+        // Update tab button states
+        tabButtons.forEach(button => {
+            button.classList.remove('active');
+            if (button.getAttribute('data-tab') === tabName) {
+                button.classList.add('active');
+            }
+        });
+        
+        // Update tab content visibility
+        tabContents.forEach(content => {
+            content.classList.remove('active');
+            if (content.id === `${tabName}-content`) {
+                content.classList.add('active');
+            }
+        });
+        
+        // Load visualization data when switching to visualization tab
+        if (tabName === 'visualization') {
+            setTimeout(() => {
+                this.loadVisualizationData();
+            }, 300); // Wait for tab transition to complete
+        }
+        
+        // Ensure SocketIO messages continue working regardless of active tab
+        // Chat data is always available even when on visualization tab
+        console.log(`Switched to ${tabName} tab - background data updates continue`);
+    }
+    
+    initializeVisualizationOnTabSwitch() {
+        // This will be called when visualization tab is activated
+        // We'll integrate the existing visualization logic here
+    }
+
+    // Initialize visualization panel functionality  
     initializeVisualizationPanel() {
         console.log('Initializing visualization panel...');
-        const panel = document.getElementById('visualization-panel');
-        const toggleBtn = document.getElementById('visualization-toggle-btn');
-        const closeBtn = document.getElementById('visualization-close-btn');
         const loading = document.getElementById('visualization-loading');
         const container = document.getElementById('visualization-container');
         const graphContainer = document.getElementById('graph-container');
         const clearBtn = document.getElementById('clear-btn');
         
-        console.log('Panel:', panel);
-        console.log('Toggle button:', toggleBtn);
-        console.log('Close button:', closeBtn);
-
-        let isExpanded = false;
-
-        // Toggle panel
-        toggleBtn.addEventListener('click', () => {
-            console.log('Visualization button clicked!');
-            if (!isExpanded) {
-                this.expandVisualizationPanel();
-            } else {
-                this.collapseVisualizationPanel();
-            }
-        });
-
-        // Close panel
-        closeBtn.addEventListener('click', () => {
-            this.collapseVisualizationPanel();
-        });
-
-        // Close on escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && isExpanded) {
-                this.collapseVisualizationPanel();
-            }
-        });
-
-
-
         // Clear data
-        clearBtn.addEventListener('click', async () => {
-            if (confirm('Are you sure you want to clear all communication data?')) {
-                await this.clearVisualizationData();
-            }
-        });
-
-
-
-        // Store methods for external access
-        this.expandVisualizationPanel = () => {
-            panel.classList.add('expanded');
-            isExpanded = true;
-            this.loadVisualizationData();
-        };
-
-        this.collapseVisualizationPanel = () => {
-            panel.classList.remove('expanded');
-            isExpanded = false;
-            
-            // Call the same functionality as the Clear Data button
-            this.clearVisualizationData();
-        };
+        if (clearBtn) {
+            clearBtn.addEventListener('click', async () => {
+                if (confirm('Are you sure you want to clear all communication data?')) {
+                    await this.clearVisualizationData();
+                }
+            });
+        }
 
         this.loadVisualizationData = async () => {
             try {
